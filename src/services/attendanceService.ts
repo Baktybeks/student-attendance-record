@@ -1,5 +1,5 @@
 import { ID, Query } from "appwrite";
-import { databases, appwriteConfig } from "@/lib/appwrite";
+import { databases, appwriteConfig } from "@/constants/appwriteConfig";
 import {
   Class,
   Attendance,

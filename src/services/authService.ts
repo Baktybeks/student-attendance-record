@@ -1,5 +1,5 @@
 import { ID, Query } from "appwrite";
-import { account, databases, appwriteConfig } from "@/lib/appwrite";
+import { account, databases, appwriteConfig } from "@/constants/appwriteConfig";
 import { User, UserRole, CreateUserDto } from "@/types";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 

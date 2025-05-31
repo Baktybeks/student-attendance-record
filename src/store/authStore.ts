@@ -1,60 +1,98 @@
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
-import { User } from "@/types";
+import { ScheduleWithDetails, WeekDay } from "@/types";
 
-interface AuthState {
-  user: User | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
+interface ScheduleState {
+  currentWeek: Date;
+  selectedDate: Date;
+  selectedDay: WeekDay | null;
+  schedule: ScheduleWithDetails[];
 
   // Действия
-  setUser: (user: User | null) => void;
-  setLoading: (loading: boolean) => void;
-  logout: () => void;
-  updateUser: (updates: Partial<User>) => void;
+  setCurrentWeek: (date: Date) => void;
+  setSelectedDate: (date: Date) => void;
+  setSelectedDay: (day: WeekDay | null) => void;
+  setSchedule: (schedule: ScheduleWithDetails[]) => void;
+  addScheduleItem: (item: ScheduleWithDetails) => void;
+  updateScheduleItem: (
+    id: string,
+    updates: Partial<ScheduleWithDetails>
+  ) => void;
+  removeScheduleItem: (id: string) => void;
+
+  // Вспомогательные функции
+  getScheduleForDay: (day: WeekDay) => ScheduleWithDetails[];
+  getScheduleForDate: (date: Date) => ScheduleWithDetails[];
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
-      user: null,
-      isAuthenticated: false,
-      isLoading: true,
+// Функция для получения дня недели из даты
+const getWeekDayFromDate = (date: Date): WeekDay => {
+  const days = [
+    WeekDay.SUNDAY,
+    WeekDay.MONDAY,
+    WeekDay.TUESDAY,
+    WeekDay.WEDNESDAY,
+    WeekDay.THURSDAY,
+    WeekDay.FRIDAY,
+    WeekDay.SATURDAY,
+  ];
+  return days[date.getDay()];
+};
 
-      setUser: (user: User | null) => {
-        set({
-          user,
-          isAuthenticated: !!user,
-          isLoading: false,
-        });
-      },
+export const useScheduleStore = create<ScheduleState>((set, get) => ({
+  currentWeek: new Date(),
+  selectedDate: new Date(),
+  selectedDay: null,
+  schedule: [],
 
-      setLoading: (loading: boolean) => {
-        set({ isLoading: loading });
-      },
+  setCurrentWeek: (date: Date) => {
+    set({ currentWeek: date });
+  },
 
-      logout: () => {
-        set({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-        });
-      },
+  setSelectedDate: (date: Date) => {
+    const day = getWeekDayFromDate(date);
+    set({
+      selectedDate: date,
+      selectedDay: day,
+    });
+  },
 
-      updateUser: (updates: Partial<User>) => {
-        const currentUser = get().user;
-        if (currentUser) {
-          set({ user: { ...currentUser, ...updates } });
-        }
-      },
-    }),
-    {
-      name: "auth-storage",
-      storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({
-        user: state.user,
-        isAuthenticated: state.isAuthenticated,
-      }),
-    }
-  )
-);
+  setSelectedDay: (day: WeekDay | null) => {
+    set({ selectedDay: day });
+  },
+
+  setSchedule: (schedule: ScheduleWithDetails[]) => {
+    set({ schedule });
+  },
+
+  addScheduleItem: (item: ScheduleWithDetails) => {
+    set((state) => ({
+      schedule: [...state.schedule, item],
+    }));
+  },
+
+  updateScheduleItem: (id: string, updates: Partial<ScheduleWithDetails>) => {
+    set((state) => ({
+      schedule: state.schedule.map((item) =>
+        item.$id === id ? { ...item, ...updates } : item
+      ),
+    }));
+  },
+
+  removeScheduleItem: (id: string) => {
+    set((state) => ({
+      schedule: state.schedule.filter((item) => item.$id !== id),
+    }));
+  },
+
+  getScheduleForDay: (day: WeekDay) => {
+    const { schedule } = get();
+    return schedule
+      .filter((item) => item.dayOfWeek === day && item.isActive)
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+  },
+
+  getScheduleForDate: (date: Date) => {
+    const day = getWeekDayFromDate(date);
+    return get().getScheduleForDay(day);
+  },
+}));
