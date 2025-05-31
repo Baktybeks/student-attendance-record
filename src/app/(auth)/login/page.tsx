@@ -7,7 +7,7 @@ import { useLogin } from "@/services/authService";
 import { useAuthStore } from "@/store/authStore";
 import { UserRole } from "@/types";
 import { Eye, EyeOff, GraduationCap, LogIn, Mail, Lock } from "lucide-react";
-import toast from "react-hot-toast";
+import Toast from "@/utils/toast";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -27,7 +27,7 @@ export default function LoginPage() {
       const user = await loginMutation.mutateAsync({ email, password });
       setUser(user);
 
-      toast.success(`Добро пожаловать, ${user.name}!`);
+      Toast.success(`Добро пожаловать, ${user.name}!`);
 
       // Перенаправление в зависимости от роли
       switch (user.role) {
@@ -44,7 +44,7 @@ export default function LoginPage() {
           router.push("/");
       }
     } catch (error: any) {
-      toast.error(error.message || "Ошибка при входе");
+      Toast.error(error.message || "Ошибка при входе");
     } finally {
       setIsLoading(false);
     }

@@ -1,6 +1,6 @@
 import { ID, Query } from "appwrite";
 import { account, databases, appwriteConfig } from "@/constants/appwriteConfig";
-import { User, UserRole, CreateUserDto } from "@/types";
+import { User, UserRole, CreateUserDto, RegisterResult } from "@/types";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // API функции
@@ -63,10 +63,33 @@ export const authApi = {
     }
   },
 
+  // Проверка, является ли пользователь первым (для автоматического назначения админом)
+  checkIsFirstUser: async (): Promise<boolean> => {
+    try {
+      const response = await databases.listDocuments(
+        appwriteConfig.databaseId,
+        appwriteConfig.collections.users,
+        [Query.equal("role", UserRole.ADMIN)]
+      );
+
+      return response.total === 0;
+    } catch (error) {
+      console.error("Ошибка при проверке первого пользователя:", error);
+      return false;
+    }
+  },
+
   // Регистрация
-  register: async (data: CreateUserDto): Promise<User> => {
+  register: async (data: CreateUserDto): Promise<RegisterResult> => {
     try {
       const { name, email, password, role, studentId, groupId, phone } = data;
+
+      // Проверяем, является ли это первым пользователем
+      const isFirstUser = await authApi.checkIsFirstUser();
+
+      // Первый пользователь автоматически становится админом
+      const userRole = isFirstUser ? UserRole.ADMIN : role;
+      const isActive = isFirstUser; // Первый пользователь сразу активен
 
       // Создаем аккаунт в Appwrite Auth
       const appwriteUser = await account.create(
@@ -84,15 +107,20 @@ export const authApi = {
         {
           name,
           email,
-          role,
-          isActive: role === UserRole.ADMIN, // Админы сразу активны
+          role: userRole,
+          isActive,
           studentId: studentId || null,
           groupId: groupId || null,
           phone: phone || null,
         }
       );
 
-      return userProfile as unknown as User;
+      const user = userProfile as unknown as User;
+
+      return {
+        user,
+        isFirstUser,
+      };
     } catch (error: any) {
       if (error.code === 409) {
         throw new Error("Пользователь с таким email уже существует");
@@ -246,7 +274,11 @@ export const useRegister = () => {
 
   return useMutation({
     mutationFn: authApi.register,
-    onSuccess: () => {
+    onSuccess: (result) => {
+      // Если первый пользователь, сразу авторизуем его
+      if (result.isFirstUser) {
+        queryClient.setQueryData(authKeys.currentUser(), result.user);
+      }
       queryClient.invalidateQueries({ queryKey: authKeys.users() });
     },
   });

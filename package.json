@@ -10,7 +10,11 @@
     "db:test": "node scripts/testConnection.js",
     "db:setup": "node scripts/setupCollections.js setup",
     "db:reset": "node scripts/setupCollections.js reset",
-    "db:reset-setup": "node scripts/setupCollections.js reset-setup"
+    "db:reset-setup": "node scripts/setupCollections.js reset-setup",
+    "permissions:check": "node scripts/setupPermissions.js check",
+    "permissions:update": "node scripts/setupPermissions.js update",
+    "permissions:setup": "node scripts/setupPermissions.js setup",
+    "setup:full": "npm run db:setup && npm run permissions:setup"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.76.0",

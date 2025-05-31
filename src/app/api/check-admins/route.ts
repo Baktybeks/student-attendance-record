@@ -1,4 +1,4 @@
-// src/app/api/check-admins/route.ts (обновленная версия)
+// src/app/api/check-admins/route.ts (исправленная версия)
 
 import { appwriteConfig } from "@/constants/appwriteConfig";
 import { Client, Databases, Query } from "appwrite";
@@ -11,20 +11,24 @@ export async function GET() {
       .setProject(appwriteConfig.projectId);
 
     const database = new Databases(client);
+    console.log(
+      database,
+      "+++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+    );
 
-    // Проверяем, есть ли пользователи с ролью SUPER_ADMIN
+    // Проверяем, есть ли пользователи с ролью ADMIN
     const adminCheck = await database.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.collections.users,
-      [Query.equal("role", UserRole.SUPER_ADMIN)]
+      [Query.equal("role", UserRole.ADMIN)]
     );
 
-    // Если нет Супер админов, значит это первый пользователь
+    // Если нет администраторов, значит это первый пользователь
     const isFirstUser = adminCheck.total === 0;
 
     return Response.json({ isFirstUser });
   } catch (error) {
-    console.error("Ошибка при проверке Супер Админов:", error);
+    console.error("Ошибка при проверке администраторов:", error);
     return Response.json({ message: "Ошибка сервера" }, { status: 500 });
   }
 }

@@ -24,7 +24,7 @@ import {
   User,
   Award,
 } from "lucide-react";
-import toast from "react-hot-toast";
+import Toast from "@/utils/toast";
 
 export default function StudentDashboard() {
   const { user, logout } = useAuthStore();

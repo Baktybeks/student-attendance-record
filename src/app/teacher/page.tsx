@@ -27,7 +27,7 @@ import {
   GraduationCap,
   MapPin,
 } from "lucide-react";
-import toast from "react-hot-toast";
+import Toast from "@/utils/toast";
 
 export default function TeacherDashboard() {
   const { user, logout } = useAuthStore();

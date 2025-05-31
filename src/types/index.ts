@@ -147,6 +147,12 @@ export interface CreateUserDto {
   phone?: string;
 }
 
+// Результат регистрации
+export interface RegisterResult {
+  user: User;
+  isFirstUser: boolean;
+}
+
 // DTO для создания группы
 export interface CreateGroupDto {
   name: string;

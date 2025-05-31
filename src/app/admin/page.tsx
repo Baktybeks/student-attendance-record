@@ -19,7 +19,7 @@ import {
   Shield,
   LogOut,
 } from "lucide-react";
-import toast from "react-hot-toast";
+import Toast from "@/utils/toast";
 
 export default function AdminDashboard() {
   const { user, logout } = useAuthStore();

@@ -1,98 +1,72 @@
 import { create } from "zustand";
-import { ScheduleWithDetails, WeekDay } from "@/types";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { User } from "@/types";
 
-interface ScheduleState {
-  currentWeek: Date;
-  selectedDate: Date;
-  selectedDay: WeekDay | null;
-  schedule: ScheduleWithDetails[];
+interface AuthState {
+  user: User | null;
+  isLoading: boolean;
+  error: string | null;
 
   // Действия
-  setCurrentWeek: (date: Date) => void;
-  setSelectedDate: (date: Date) => void;
-  setSelectedDay: (day: WeekDay | null) => void;
-  setSchedule: (schedule: ScheduleWithDetails[]) => void;
-  addScheduleItem: (item: ScheduleWithDetails) => void;
-  updateScheduleItem: (
-    id: string,
-    updates: Partial<ScheduleWithDetails>
-  ) => void;
-  removeScheduleItem: (id: string) => void;
+  setUser: (user: User | null) => void;
+  setLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
+  clearUser: () => void;
+  logout: () => void;
 
-  // Вспомогательные функции
-  getScheduleForDay: (day: WeekDay) => ScheduleWithDetails[];
-  getScheduleForDate: (date: Date) => ScheduleWithDetails[];
+  // Вспомогательные геттеры
+  isAuthenticated: () => boolean;
+  isActive: () => boolean;
+  getRole: () => string | null;
 }
 
-// Функция для получения дня недели из даты
-const getWeekDayFromDate = (date: Date): WeekDay => {
-  const days = [
-    WeekDay.SUNDAY,
-    WeekDay.MONDAY,
-    WeekDay.TUESDAY,
-    WeekDay.WEDNESDAY,
-    WeekDay.THURSDAY,
-    WeekDay.FRIDAY,
-    WeekDay.SATURDAY,
-  ];
-  return days[date.getDay()];
-};
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
+      user: null,
+      isLoading: false,
+      error: null,
 
-export const useScheduleStore = create<ScheduleState>((set, get) => ({
-  currentWeek: new Date(),
-  selectedDate: new Date(),
-  selectedDay: null,
-  schedule: [],
+      setUser: (user: User | null) => {
+        set({ user, error: null });
+      },
 
-  setCurrentWeek: (date: Date) => {
-    set({ currentWeek: date });
-  },
+      setLoading: (isLoading: boolean) => {
+        set({ isLoading });
+      },
 
-  setSelectedDate: (date: Date) => {
-    const day = getWeekDayFromDate(date);
-    set({
-      selectedDate: date,
-      selectedDay: day,
-    });
-  },
+      setError: (error: string | null) => {
+        set({ error });
+      },
 
-  setSelectedDay: (day: WeekDay | null) => {
-    set({ selectedDay: day });
-  },
+      clearUser: () => {
+        set({ user: null, error: null });
+      },
 
-  setSchedule: (schedule: ScheduleWithDetails[]) => {
-    set({ schedule });
-  },
+      logout: () => {
+        set({ user: null, error: null, isLoading: false });
+      },
 
-  addScheduleItem: (item: ScheduleWithDetails) => {
-    set((state) => ({
-      schedule: [...state.schedule, item],
-    }));
-  },
+      // Геттеры
+      isAuthenticated: () => {
+        const { user } = get();
+        return !!user;
+      },
 
-  updateScheduleItem: (id: string, updates: Partial<ScheduleWithDetails>) => {
-    set((state) => ({
-      schedule: state.schedule.map((item) =>
-        item.$id === id ? { ...item, ...updates } : item
-      ),
-    }));
-  },
+      isActive: () => {
+        const { user } = get();
+        return user?.isActive === true;
+      },
 
-  removeScheduleItem: (id: string) => {
-    set((state) => ({
-      schedule: state.schedule.filter((item) => item.$id !== id),
-    }));
-  },
-
-  getScheduleForDay: (day: WeekDay) => {
-    const { schedule } = get();
-    return schedule
-      .filter((item) => item.dayOfWeek === day && item.isActive)
-      .sort((a, b) => a.startTime.localeCompare(b.startTime));
-  },
-
-  getScheduleForDate: (date: Date) => {
-    const day = getWeekDayFromDate(date);
-    return get().getScheduleForDay(day);
-  },
-}));
+      getRole: () => {
+        const { user } = get();
+        return user?.role || null;
+      },
+    }),
+    {
+      name: "auth-storage",
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({ user: state.user }),
+    }
+  )
+);
