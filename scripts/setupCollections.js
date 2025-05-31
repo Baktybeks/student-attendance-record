@@ -1,4 +1,3 @@
-// scripts/setupMaintenanceCollections.js
 const { Client, Databases, Permission, Role } = require("node-appwrite");
 require("dotenv").config({ path: ".env.local" });
 
@@ -9,18 +8,12 @@ const appwriteConfig = {
   databaseId: process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID || "",
   collections: {
     users: process.env.NEXT_PUBLIC_USERS_COLLECTION_ID || "users",
-    maintenanceRequests:
-      process.env.NEXT_PUBLIC_MAINTENANCE_REQUESTS_COLLECTION_ID ||
-      "maintenance_requests",
-    requestComments:
-      process.env.NEXT_PUBLIC_REQUEST_COMMENTS_COLLECTION_ID ||
-      "request_comments",
-    requestHistory:
-      process.env.NEXT_PUBLIC_REQUEST_HISTORY_COLLECTION_ID ||
-      "request_history",
-    requestAttachments:
-      process.env.NEXT_PUBLIC_REQUEST_ATTACHMENTS_COLLECTION_ID ||
-      "request_attachments",
+    groups: process.env.NEXT_PUBLIC_GROUPS_COLLECTION_ID || "groups",
+    subjects: process.env.NEXT_PUBLIC_SUBJECTS_COLLECTION_ID || "subjects",
+    schedule: process.env.NEXT_PUBLIC_SCHEDULE_COLLECTION_ID || "schedule",
+    attendance:
+      process.env.NEXT_PUBLIC_ATTENDANCE_COLLECTION_ID || "attendance",
+    classes: process.env.NEXT_PUBLIC_CLASSES_COLLECTION_ID || "classes",
   },
 };
 
@@ -31,80 +24,89 @@ const COLLECTION_SCHEMAS = {
     role: {
       type: "enum",
       required: true,
-      elements: ["SUPER_ADMIN", "MANAGER", "TECHNICIAN", "REQUESTER"],
+      elements: ["admin", "teacher", "student"],
     },
     isActive: { type: "boolean", required: false, default: false },
-    specialization: { type: "string", required: false, size: 255 },
+    studentId: { type: "string", required: false, size: 50 },
+    groupId: { type: "string", required: false, size: 36 },
     phone: { type: "string", required: false, size: 50 },
-    createdAt: { type: "datetime", required: true },
-    createdBy: { type: "string", required: false },
+    avatar: { type: "url", required: false, size: 500 },
   },
 
-  maintenanceRequests: {
-    title: { type: "string", required: true, size: 255 },
-    description: { type: "string", required: true, size: 2000 },
-    category: {
+  groups: {
+    name: { type: "string", required: true, size: 255 },
+    code: { type: "string", required: true, size: 50 },
+    course: { type: "integer", required: true, min: 1, max: 6 },
+    specialization: { type: "string", required: true, size: 255 },
+    isActive: { type: "boolean", required: false, default: true },
+    studentsCount: { type: "integer", required: false, min: 0, default: 0 },
+  },
+
+  subjects: {
+    name: { type: "string", required: true, size: 255 },
+    code: { type: "string", required: true, size: 50 },
+    description: { type: "string", required: false, size: 1000 },
+    teacherId: { type: "string", required: true, size: 36 },
+    groupIds: { type: "string", required: true, array: true },
+    isActive: { type: "boolean", required: false, default: true },
+    hoursTotal: { type: "integer", required: true, min: 1 },
+  },
+
+  schedule: {
+    subjectId: { type: "string", required: true, size: 36 },
+    groupId: { type: "string", required: true, size: 36 },
+    teacherId: { type: "string", required: true, size: 36 },
+    dayOfWeek: {
       type: "enum",
       required: true,
       elements: [
-        "ELECTRICAL",
-        "PLUMBING",
-        "HVAC",
-        "CARPENTRY",
-        "PAINTING",
-        "CLEANING",
-        "OTHER",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
       ],
     },
-    priority: {
+    startTime: { type: "string", required: true, size: 5 }, // HH:MM
+    endTime: { type: "string", required: true, size: 5 }, // HH:MM
+    classroom: { type: "string", required: true, size: 100 },
+    weekType: {
       type: "enum",
-      required: true,
-      elements: ["LOW", "MEDIUM", "HIGH", "URGENT"],
+      required: false,
+      elements: ["odd", "even", "all"],
+      default: "all",
     },
+    isActive: { type: "boolean", required: false, default: true },
+  },
+
+  classes: {
+    scheduleId: { type: "string", required: true, size: 36 },
+    subjectId: { type: "string", required: true, size: 36 },
+    groupId: { type: "string", required: true, size: 36 },
+    teacherId: { type: "string", required: true, size: 36 },
+    date: { type: "datetime", required: true },
+    startTime: { type: "string", required: true, size: 5 },
+    endTime: { type: "string", required: true, size: 5 },
+    classroom: { type: "string", required: true, size: 100 },
+    topic: { type: "string", required: false, size: 500 },
+    isCompleted: { type: "boolean", required: false, default: false },
+    isCanceled: { type: "boolean", required: false, default: false },
+    notes: { type: "string", required: false, size: 1000 },
+  },
+
+  attendance: {
+    classId: { type: "string", required: true, size: 36 },
+    studentId: { type: "string", required: true, size: 36 },
     status: {
       type: "enum",
       required: true,
-      elements: ["NEW", "IN_PROGRESS", "COMPLETED", "CLOSED"],
-      default: "NEW",
+      elements: ["present", "absent", "late", "excused"],
     },
-    location: { type: "string", required: true, size: 500 },
-    requesterId: { type: "string", required: true, size: 36 },
-    assignedTechnicianId: { type: "string", required: false, size: 36 },
-    managerId: { type: "string", required: false, size: 36 },
-    attachments: { type: "string", required: false, array: true },
-    estimatedCompletionDate: { type: "datetime", required: false },
-    actualCompletionDate: { type: "datetime", required: false },
-    notes: { type: "string", required: false, size: 2000 },
-    cost: { type: "integer", required: false, min: 0 },
-    createdAt: { type: "datetime", required: true },
-  },
-
-  requestComments: {
-    requestId: { type: "string", required: true, size: 36 },
-    authorId: { type: "string", required: true, size: 36 },
-    text: { type: "string", required: true, size: 2000 },
-    isInternal: { type: "boolean", required: false, default: false },
-    createdAt: { type: "datetime", required: true },
-  },
-
-  requestHistory: {
-    requestId: { type: "string", required: true, size: 36 },
-    userId: { type: "string", required: true, size: 36 },
-    action: { type: "string", required: true, size: 255 },
-    oldValue: { type: "string", required: false, size: 500 },
-    newValue: { type: "string", required: false, size: 500 },
-    description: { type: "string", required: true, size: 1000 },
-    createdAt: { type: "datetime", required: true },
-  },
-
-  requestAttachments: {
-    requestId: { type: "string", required: true, size: 36 },
-    fileName: { type: "string", required: true, size: 255 },
-    fileUrl: { type: "url", required: true, size: 500 },
-    fileSize: { type: "integer", required: false, min: 0 },
-    mimeType: { type: "string", required: false, size: 100 },
-    uploadedBy: { type: "string", required: true, size: 36 },
-    createdAt: { type: "datetime", required: true },
+    notes: { type: "string", required: false, size: 500 },
+    markedAt: { type: "datetime", required: true },
+    markedBy: { type: "string", required: true, size: 36 },
   },
 };
 
@@ -113,39 +115,51 @@ const COLLECTION_INDEXES = {
     { key: "email", type: "unique" },
     { key: "role", type: "key" },
     { key: "isActive", type: "key" },
-    { key: "specialization", type: "key" },
+    { key: "groupId", type: "key" },
+    { key: "studentId", type: "key" },
   ],
 
-  maintenanceRequests: [
+  groups: [
+    { key: "code", type: "unique" },
+    { key: "course", type: "key" },
+    { key: "isActive", type: "key" },
+  ],
+
+  subjects: [
+    { key: "code", type: "unique" },
+    { key: "teacherId", type: "key" },
+    { key: "isActive", type: "key" },
+  ],
+
+  schedule: [
+    { key: "subjectId", type: "key" },
+    { key: "groupId", type: "key" },
+    { key: "teacherId", type: "key" },
+    { key: "dayOfWeek", type: "key" },
+    { key: "isActive", type: "key" },
+  ],
+
+  classes: [
+    { key: "scheduleId", type: "key" },
+    { key: "subjectId", type: "key" },
+    { key: "groupId", type: "key" },
+    { key: "teacherId", type: "key" },
+    { key: "date", type: "key" },
+    { key: "isCompleted", type: "key" },
+    { key: "isCanceled", type: "key" },
+  ],
+
+  attendance: [
+    { key: "classId", type: "key" },
+    { key: "studentId", type: "key" },
     { key: "status", type: "key" },
-    { key: "category", type: "key" },
-    { key: "priority", type: "key" },
-    { key: "requesterId", type: "key" },
-    { key: "assignedTechnicianId", type: "key" },
-    { key: "managerId", type: "key" },
-    { key: "createdAt", type: "key" },
-    { key: "estimatedCompletionDate", type: "key" },
-    { key: "actualCompletionDate", type: "key" },
-  ],
-
-  requestComments: [
-    { key: "requestId", type: "key" },
-    { key: "authorId", type: "key" },
-    { key: "isInternal", type: "key" },
-    { key: "createdAt", type: "key" },
-  ],
-
-  requestHistory: [
-    { key: "requestId", type: "key" },
-    { key: "userId", type: "key" },
-    { key: "action", type: "key" },
-    { key: "createdAt", type: "key" },
-  ],
-
-  requestAttachments: [
-    { key: "requestId", type: "key" },
-    { key: "uploadedBy", type: "key" },
-    { key: "createdAt", type: "key" },
+    { key: "markedAt", type: "key" },
+    { key: "markedBy", type: "key" },
+    {
+      key: "classId-studentId",
+      type: "unique",
+      attributes: ["classId", "studentId"],
+    },
   ],
 };
 
@@ -160,7 +174,6 @@ const databases = new Databases(client);
 const createAttribute = async (databaseId, collectionId, key, schema) => {
   try {
     const attributeType = schema.type;
-
     let isRequired = schema.required || false;
     let defaultValue = schema.default;
 
@@ -275,7 +288,9 @@ const createIndex = async (databaseId, collectionId, indexConfig) => {
 
 const setupCollections = async () => {
   try {
-    console.log("🚀 Начинаем создание коллекций для системы заявок...");
+    console.log(
+      "🚀 Начинаем создание коллекций для системы учёта посещаемости..."
+    );
     console.log(
       "📋 Всего коллекций для создания:",
       Object.keys(COLLECTION_SCHEMAS).length
@@ -422,7 +437,7 @@ const checkEnvironment = () => {
 };
 
 const main = async () => {
-  console.log("🔧 Maintenance Requests System - Настройка базы данных\n");
+  console.log("🎓 AttendTrack - Настройка базы данных\n");
 
   checkEnvironment();
 
@@ -444,10 +459,13 @@ const main = async () => {
     default:
       console.log("📖 Использование:");
       console.log(
-        "  node scripts/setupMaintenanceCollections.js reset        - Удалить коллекции"
+        "  node scripts/setupCollections.js setup        - Создать коллекции"
       );
       console.log(
-        "  node scripts/setupMaintenanceCollections.js reset-setup  - Пересоздать коллекции"
+        "  node scripts/setupCollections.js reset        - Удалить коллекции"
+      );
+      console.log(
+        "  node scripts/setupCollections.js reset-setup  - Пересоздать коллекции"
       );
       break;
   }
