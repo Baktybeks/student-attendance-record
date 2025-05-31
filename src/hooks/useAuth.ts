@@ -1,4 +1,4 @@
-// src/hooks/useAuth.ts (Исправленная версия)
+// src/hooks/useAuth.ts (Обновленная версия с react-toastify)
 
 import { useAuthStore } from "@/store/authStore";
 import {
@@ -82,7 +82,7 @@ export function useAuth(): AuthHookReturn {
     data: currentUser,
     isLoading: isCheckingAuth,
     error: authError,
-    refetch: refetchCurrentUser, // ИСПРАВЛЕНО: правильное название свойства
+    refetch: refetchCurrentUser,
   } = useCurrentUser();
 
   const loginMutation = useLogin();
@@ -90,7 +90,7 @@ export function useAuth(): AuthHookReturn {
   const registerMutation = useRegister();
   const permissions = usePermissions();
 
-  // ИСПРАВЛЕНО: Безопасная синхронизация состояния Zustand с React Query
+  // Безопасная синхронизация состояния Zustand с React Query
   useEffect(() => {
     try {
       // Проверяем, что currentUser определен и является объектом
@@ -135,11 +135,19 @@ export function useAuth(): AuthHookReturn {
           toast.error("❌ Неверный email или пароль", {
             position: "top-center",
             autoClose: 4000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
           });
         } else {
           toast.error(`❌ ${message}`, {
             position: "top-center",
             autoClose: 5000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
           });
         }
 
@@ -156,6 +164,10 @@ export function useAuth(): AuthHookReturn {
       toast.success("👋 Вы успешно вышли из системы", {
         position: "top-right",
         autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
       });
     } catch (error: any) {
       // Даже при ошибке очищаем локальное состояние
@@ -164,6 +176,10 @@ export function useAuth(): AuthHookReturn {
       toast.warning("⚠️ Произошла ошибка при выходе, но сессия очищена", {
         position: "top-right",
         autoClose: 4000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
       });
       throw error;
     }
@@ -205,21 +221,37 @@ export function useAuth(): AuthHookReturn {
           toast.error("📧 Пользователь с таким email уже зарегистрирован", {
             position: "top-center",
             autoClose: 5000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
           });
         } else if (message.includes("пароль") || message.includes("password")) {
           toast.error("🔒 Пароль должен содержать минимум 8 символов", {
             position: "top-center",
             autoClose: 5000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
           });
         } else if (message.includes("email") || message.includes("Email")) {
           toast.error("📧 Некорректный формат email адреса", {
             position: "top-center",
             autoClose: 5000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
           });
         } else {
           toast.error(`❌ Ошибка регистрации: ${message}`, {
             position: "top-center",
             autoClose: 5000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
           });
         }
 
@@ -246,6 +278,10 @@ export function useAuth(): AuthHookReturn {
         toast.error("🔐 Проблема с аутентификацией. Попробуйте войти заново", {
           position: "top-center",
           autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
         });
       }
     }
@@ -269,10 +305,10 @@ export function useAuth(): AuthHookReturn {
     null;
 
   // Проверки ролей
-  const isSuper = user?.role === UserRole.SUPER_ADMIN;
-  const isManager = user?.role === UserRole.MANAGER;
-  const isTechnician = user?.role === UserRole.TECHNICIAN;
-  const isRequester = user?.role === UserRole.REQUESTER;
+  const isSuper = user?.role === UserRole.ADMIN; // Изменено с SUPER_ADMIN на ADMIN
+  const isManager = user?.role === UserRole.TEACHER; // Изменено с MANAGER на TEACHER
+  const isTechnician = user?.role === UserRole.TEACHER; // Адаптировано для системы
+  const isRequester = user?.role === UserRole.STUDENT; // Изменено с REQUESTER на STUDENT
 
   return {
     // Состояние пользователя
@@ -294,7 +330,7 @@ export function useAuth(): AuthHookReturn {
     isRegistering: registerMutation.isPending,
     isCheckingAuth,
 
-    // Проверки ролей
+    // Проверки ролей (адаптированы для системы посещаемости)
     isSuper,
     isManager,
     isTechnician,
@@ -302,11 +338,11 @@ export function useAuth(): AuthHookReturn {
 
     // Проверки прав доступа (из usePermissions)
     canManageUsers: permissions.canManageUsers,
-    canManageRequests: permissions.canManageRequests,
-    canAssignTechnicians: permissions.canAssignTechnicians,
-    canViewAllRequests: permissions.canViewAllRequests,
-    canCreateRequests: permissions.canCreateRequests,
-    canUpdateRequestStatus: permissions.canUpdateRequestStatus,
+    canManageRequests: permissions.canCreateClasses, // Адаптировано
+    canAssignTechnicians: permissions.canAssignTeachers, // Адаптировано
+    canViewAllRequests: permissions.canViewAllAttendance, // Адаптировано
+    canCreateRequests: permissions.canCreateClasses, // Адаптировано
+    canUpdateRequestStatus: permissions.canUpdateAttendance, // Адаптировано
   };
 }
 
@@ -338,6 +374,10 @@ export function useProtectedAction(
         toast.error("❌ У вас нет прав для выполнения этого действия", {
           position: "top-center",
           autoClose: 4000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
         });
       }
     },
@@ -345,9 +385,9 @@ export function useProtectedAction(
   );
 }
 
-// ИСПРАВЛЕНО: Хук для автообновления токена
+// Хук для автообновления токена
 export function useAuthRefresh() {
-  const { data: currentUser, refetch: refetchCurrentUser } = useCurrentUser(); // ИСПРАВЛЕНО
+  const { data: currentUser, refetch: refetchCurrentUser } = useCurrentUser();
 
   useEffect(() => {
     // Проверяем сессию каждые 15 минут
@@ -356,7 +396,7 @@ export function useAuthRefresh() {
     }, 15 * 60 * 1000);
 
     return () => clearInterval(interval);
-  }, [refetchCurrentUser]); // ИСПРАВЛЕНО
+  }, [refetchCurrentUser]);
 }
 
 // Хук для отслеживания времени неактивности
@@ -401,7 +441,7 @@ export function useIdleTimer(
   }, [isAuthenticated, onIdle, timeoutMs]);
 }
 
-// ИСПРАВЛЕНО: Хук для уведомлений о статусе аутентификации
+// Хук для уведомлений о статусе аутентификации
 export function useAuthNotifications() {
   const { isAuthenticated, user } = useAuth();
 
@@ -416,6 +456,10 @@ export function useAuthNotifications() {
         toast.success(`Добро пожаловать, ${user.name}!`, {
           position: "top-right",
           autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
         });
         sessionStorage.setItem("auth_welcome_shown", "true");
       }

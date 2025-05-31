@@ -17,25 +17,26 @@
     "setup:full": "npm run db:setup && npm run permissions:setup"
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.3",
+    "@tailwindcss/postcss": "^4.1.6",
     "@tanstack/react-query": "^5.76.0",
     "@tanstack/react-query-devtools": "^5.76.0",
-    "@tailwindcss/postcss": "^4.1.6",
+    "@types/react-datepicker": "^7.0.0",
     "appwrite": "^17.0.2",
+    "dotenv": "^16.5.0",
     "lucide-react": "^0.511.0",
     "next": "15.3.2",
+    "node-appwrite": "^13.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-hot-toast": "^2.4.1",
-    "zustand": "^5.0.4",
-    "@headlessui/react": "^2.2.3",
-    "@types/react-datepicker": "^7.0.0",
-    "dotenv": "^16.5.0",
-    "node-appwrite": "^13.0.0"
+    "react-toastify": "^11.0.5",
+    "zustand": "^5.0.4"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/react-toastify": "^4.0.2",
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.3",
     "tailwindcss": "^4.1.6",

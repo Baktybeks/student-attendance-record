@@ -1,3 +1,5 @@
+// src/app/admin/page.tsx (Обновленная версия с react-toastify)
+
 "use client";
 
 import React, { useState } from "react";
@@ -19,7 +21,7 @@ import {
   Shield,
   LogOut,
 } from "lucide-react";
-import Toast from "@/utils/toast";
+import { toast } from "react-toastify"; // Обновленный импорт
 
 export default function AdminDashboard() {
   const { user, logout } = useAuthStore();
@@ -33,7 +35,7 @@ export default function AdminDashboard() {
 
   const handleLogout = () => {
     logout();
-    toast.success("Успешный выход из системы");
+    toast.success("Успешный выход из системы"); // Обновленное использование
   };
 
   // Статистика
@@ -188,14 +190,14 @@ export default function AdminDashboard() {
                 description="Создать нового студента или преподавателя"
                 icon={Plus}
                 color="bg-blue-500"
-                onClick={() => toast.success("Функция в разработке")}
+                onClick={() => toast.info("Функция в разработке")} // Обновлено
               />
               <QuickActionCard
                 title="Создать группу"
                 description="Добавить новую учебную группу"
                 icon={Users}
                 color="bg-emerald-500"
-                onClick={() => toast.success("Функция в разработке")}
+                onClick={() => toast.info("Функция в разработке")} // Обновлено
               />
               <QuickActionCard
                 title="Настроить расписание"
@@ -377,7 +379,10 @@ function UsersManagement({
         <h2 className="text-2xl font-bold text-slate-900">
           Управление пользователями
         </h2>
-        <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
+        <button
+          onClick={() => toast.info("Функция в разработке")} // Обновлено
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+        >
           <Plus className="w-4 h-4" />
           <span>Добавить пользователя</span>
         </button>

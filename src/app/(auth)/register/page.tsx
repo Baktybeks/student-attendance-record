@@ -1,3 +1,5 @@
+// src/app/(auth)/register/page.tsx (Обновленная версия)
+
 "use client";
 
 import React, { useState } from "react";
@@ -17,7 +19,7 @@ import {
   Phone,
   Users,
 } from "lucide-react";
-import Toast from "@/utils/toast";
+import { toast } from "react-toastify"; // Обновленный импорт
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -44,13 +46,13 @@ export default function RegisterPage() {
 
     // Валидация пароля
     if (formData.password !== formData.confirmPassword) {
-      Toast.error("Пароли не совпадают");
+      toast.error("Пароли не совпадают"); // Обновлено
       setIsLoading(false);
       return;
     }
 
     if (formData.password.length < 8) {
-      Toast.error("Пароль должен содержать минимум 8 символов");
+      toast.error("Пароль должен содержать минимум 8 символов"); // Обновлено
       setIsLoading(false);
       return;
     }
@@ -66,7 +68,8 @@ export default function RegisterPage() {
       });
 
       if (result.isFirstUser) {
-        Toast.success(
+        toast.success(
+          // Обновлено
           "Первый пользователь создан как Администратор! Выполняется автоматический вход..."
         );
         // Автоматически логиним первого пользователя
@@ -78,17 +81,18 @@ export default function RegisterPage() {
           router.push("/admin");
         } catch (loginError) {
           console.error("Ошибка автоматического входа:", loginError);
-          Toast.info("Пожалуйста, войдите в систему");
+          toast.info("Пожалуйста, войдите в систему"); // Обновлено
           router.push("/login");
         }
       } else {
-        Toast.success(
+        toast.success(
+          // Обновлено
           "Регистрация успешна! Ожидайте активации вашего аккаунта администратором."
         );
         router.push("/login");
       }
     } catch (error: any) {
-      Toast.error(error.message || "Ошибка при регистрации");
+      toast.error(error.message || "Ошибка при регистрации"); // Обновлено
     } finally {
       setIsLoading(false);
     }

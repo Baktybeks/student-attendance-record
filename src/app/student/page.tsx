@@ -1,3 +1,5 @@
+// src/app/student/page.tsx (Обновленная версия)
+
 "use client";
 
 import React, { useState } from "react";
@@ -24,7 +26,7 @@ import {
   User,
   Award,
 } from "lucide-react";
-import Toast from "@/utils/toast";
+import { toast } from "react-toastify"; // Обновленный импорт
 
 export default function StudentDashboard() {
   const { user, logout } = useAuthStore();
@@ -37,7 +39,7 @@ export default function StudentDashboard() {
 
   const handleLogout = () => {
     logout();
-    toast.success("Успешный выход из системы");
+    toast.success("Успешный выход из системы"); // Обновлено
   };
 
   const today = new Date();
@@ -423,6 +425,14 @@ function ScheduleTab({
           Расписание на неделю
         </h3>
         <p className="text-slate-600">Функция в разработке</p>
+        <button
+          onClick={() =>
+            toast.info("Расписание будет добавлено в следующем обновлении")
+          }
+          className="mt-4 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+        >
+          Уведомить о готовности
+        </button>
       </div>
     </div>
   );
@@ -472,6 +482,17 @@ function AttendanceTab({ attendanceHistory }: { attendanceHistory: any[] }) {
               </div>
             ))}
           </div>
+
+          <div className="mt-6 text-center">
+            <button
+              onClick={() =>
+                toast.info("Экспорт посещаемости будет доступен скоро")
+              }
+              className="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-200 transition-colors"
+            >
+              Экспортировать историю
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -480,6 +501,14 @@ function AttendanceTab({ attendanceHistory }: { attendanceHistory: any[] }) {
 
 // Компонент вкладки профиля
 function ProfileTab({ user }: { user: any }) {
+  const handleUpdateProfile = () => {
+    toast.info("Редактирование профиля будет доступно в следующем обновлении");
+  };
+
+  const handleChangePassword = () => {
+    toast.info("Смена пароля будет доступна в следующем обновлении");
+  };
+
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-slate-900">Мой профиль</h2>
@@ -521,6 +550,21 @@ function ProfileTab({ user }: { user: any }) {
                   Информационные технологии
                 </p>
               </div>
+            </div>
+
+            <div className="mt-6 flex space-x-3">
+              <button
+                onClick={handleUpdateProfile}
+                className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                Редактировать профиль
+              </button>
+              <button
+                onClick={handleChangePassword}
+                className="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-200 transition-colors"
+              >
+                Сменить пароль
+              </button>
             </div>
           </div>
         </div>

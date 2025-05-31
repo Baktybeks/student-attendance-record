@@ -1,3 +1,5 @@
+// src/app/teacher/page.tsx (Обновленная версия)
+
 "use client";
 
 import React, { useState } from "react";
@@ -27,7 +29,7 @@ import {
   GraduationCap,
   MapPin,
 } from "lucide-react";
-import Toast from "@/utils/toast";
+import { toast } from "react-toastify"; // Обновленный импорт
 
 export default function TeacherDashboard() {
   const { user, logout } = useAuthStore();
@@ -44,7 +46,7 @@ export default function TeacherDashboard() {
 
   const handleLogout = () => {
     logout();
-    toast.success("Успешный выход из системы");
+    toast.success("Успешный выход из системы"); // Обновлено
   };
 
   // Получаем дату сегодня и дни недели
@@ -326,7 +328,7 @@ function ClassCard({ classItem }: ClassCardProps) {
 
   const handleMarkAttendance = () => {
     setAttendanceMarked(true);
-    toast.success("Посещаемость отмечена");
+    toast.attendanceMarked(); // Обновлено - используем специальный метод
   };
 
   return (
@@ -452,13 +454,22 @@ function ClassCard({ classItem }: ClassCardProps) {
               <div className="space-y-3">
                 <h4 className="text-sm font-medium text-slate-700">Действия</h4>
                 <div className="space-y-2">
-                  <button className="w-full bg-slate-100 text-slate-700 py-2 px-3 rounded-lg hover:bg-slate-200 transition-colors text-sm">
+                  <button
+                    onClick={() => toast.info("Функция в разработке")}
+                    className="w-full bg-slate-100 text-slate-700 py-2 px-3 rounded-lg hover:bg-slate-200 transition-colors text-sm"
+                  >
                     Просмотреть список
                   </button>
-                  <button className="w-full bg-slate-100 text-slate-700 py-2 px-3 rounded-lg hover:bg-slate-200 transition-colors text-sm">
+                  <button
+                    onClick={() => toast.info("Экспорт в разработке")}
+                    className="w-full bg-slate-100 text-slate-700 py-2 px-3 rounded-lg hover:bg-slate-200 transition-colors text-sm"
+                  >
                     Экспорт в Excel
                   </button>
-                  <button className="w-full bg-slate-100 text-slate-700 py-2 px-3 rounded-lg hover:bg-slate-200 transition-colors text-sm">
+                  <button
+                    onClick={() => toast.info("История в разработке")}
+                    className="w-full bg-slate-100 text-slate-700 py-2 px-3 rounded-lg hover:bg-slate-200 transition-colors text-sm"
+                  >
                     История изменений
                   </button>
                 </div>
