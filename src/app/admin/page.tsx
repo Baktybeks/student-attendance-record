@@ -1,10 +1,17 @@
-// src/app/admin/page.tsx (Обновленная версия с react-toastify)
+// src/app/admin/page.tsx (Полная версия с управлением)
 
 "use client";
 
 import React, { useState } from "react";
 import { useAuthStore } from "@/store/authStore";
-import { useAllUsers, useUsersByRole } from "@/services/authService";
+import {
+  useAllUsers,
+  useUsersByRole,
+  useActivateUser,
+  useDeactivateUser,
+} from "@/services/authService";
+import { useAllGroups } from "@/services/groupeServise";
+import { useAllSubjects } from "@/services/subjectService";
 import { UserRole, getRoleLabel } from "@/types";
 import {
   Users,
@@ -19,10 +26,27 @@ import {
   TrendingUp,
   Clock,
   Shield,
-  LogOut,
+  Edit,
+  Trash2,
+  Search,
+  Filter,
+  Download,
+  Upload,
+  CheckCircle,
+  XCircle,
+  Eye,
+  EyeOff,
 } from "lucide-react";
-import { toast } from "react-toastify"; // Обновленный импорт
+import { toast } from "react-toastify";
 import { LogoutButton } from "@/components/LogoutButton";
+
+// Импорты компонентов управления
+import {
+  UsersManagement,
+  GroupsManagement,
+  SubjectsManagement,
+  ScheduleManagement,
+} from "@/components/admin";
 
 export default function AdminDashboard() {
   const { user, logout } = useAuthStore();
@@ -33,6 +57,8 @@ export default function AdminDashboard() {
   const { data: allUsers = [], isLoading: usersLoading } = useAllUsers();
   const { data: students = [] } = useUsersByRole(UserRole.STUDENT);
   const { data: teachers = [] } = useUsersByRole(UserRole.TEACHER);
+  const { data: groups = [] } = useAllGroups();
+  const { data: subjects = [] } = useAllSubjects();
 
   // Статистика
   const stats = {
@@ -40,6 +66,8 @@ export default function AdminDashboard() {
     activeUsers: allUsers.filter((u) => u.isActive).length,
     totalStudents: students.length,
     totalTeachers: teachers.length,
+    totalGroups: groups.length,
+    totalSubjects: subjects.length,
     pendingUsers: allUsers.filter((u) => !u.isActive).length,
   };
 
@@ -137,14 +165,39 @@ export default function AdminDashboard() {
                 value={stats.totalStudents}
                 icon={GraduationCap}
                 color="bg-purple-500"
-                trend="В 3 группах"
+                trend={`В ${stats.totalGroups} группах`}
               />
               <StatCard
                 title="Преподавателей"
                 value={stats.totalTeachers}
                 icon={BookOpen}
                 color="bg-orange-500"
-                trend="5 предметов"
+                trend={`${stats.totalSubjects} предметов`}
+              />
+            </div>
+
+            {/* Дополнительная статистика */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <StatCard
+                title="Групп"
+                value={stats.totalGroups}
+                icon={Users}
+                color="bg-indigo-500"
+                trend="Активных групп"
+              />
+              <StatCard
+                title="Предметов"
+                value={stats.totalSubjects}
+                icon={BookOpen}
+                color="bg-cyan-500"
+                trend="В учебном плане"
+              />
+              <StatCard
+                title="Занятий сегодня"
+                value={0}
+                icon={Calendar}
+                color="bg-pink-500"
+                trend="По расписанию"
               />
             </div>
 
@@ -181,14 +234,14 @@ export default function AdminDashboard() {
                 description="Создать нового студента или преподавателя"
                 icon={Plus}
                 color="bg-blue-500"
-                onClick={() => toast.info("Функция в разработке")} // Обновлено
+                onClick={() => setActiveTab("users")}
               />
               <QuickActionCard
                 title="Создать группу"
                 description="Добавить новую учебную группу"
                 icon={Users}
                 color="bg-emerald-500"
-                onClick={() => toast.info("Функция в разработке")} // Обновлено
+                onClick={() => setActiveTab("groups")}
               />
               <QuickActionCard
                 title="Настроить расписание"
@@ -248,35 +301,11 @@ export default function AdminDashboard() {
           />
         )}
 
-        {activeTab === "groups" && (
-          <div className="text-center py-12">
-            <Users className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-900 mb-2">
-              Управление группами
-            </h3>
-            <p className="text-slate-600">Функция в разработке</p>
-          </div>
-        )}
+        {activeTab === "groups" && <GroupsManagement />}
 
-        {activeTab === "subjects" && (
-          <div className="text-center py-12">
-            <BookOpen className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-900 mb-2">
-              Управление предметами
-            </h3>
-            <p className="text-slate-600">Функция в разработке</p>
-          </div>
-        )}
+        {activeTab === "subjects" && <SubjectsManagement />}
 
-        {activeTab === "schedule" && (
-          <div className="text-center py-12">
-            <Calendar className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-900 mb-2">
-              Управление расписанием
-            </h3>
-            <p className="text-slate-600">Функция в разработке</p>
-          </div>
-        )}
+        {activeTab === "schedule" && <ScheduleManagement />}
       </main>
     </div>
   );
@@ -339,110 +368,6 @@ function QuickActionCard({
       </div>
       <h3 className="text-lg font-medium text-slate-900 mb-2">{title}</h3>
       <p className="text-slate-600">{description}</p>
-    </div>
-  );
-}
-
-// Компонент управления пользователями
-interface UsersManagementProps {
-  users: any[];
-  isLoading: boolean;
-  pendingCount: number;
-}
-
-function UsersManagement({
-  users,
-  isLoading,
-  pendingCount,
-}: UsersManagementProps) {
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-3 text-slate-600">Загрузка пользователей...</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-slate-900">
-          Управление пользователями
-        </h2>
-        <button
-          onClick={() => toast.info("Функция в разработке")} // Обновлено
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Добавить пользователя</span>
-        </button>
-      </div>
-
-      {pendingCount > 0 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="flex items-center space-x-2">
-            <Clock className="w-5 h-5 text-yellow-600" />
-            <span className="text-yellow-800 font-medium">
-              {pendingCount} пользователей ожидают активации
-            </span>
-          </div>
-        </div>
-      )}
-
-      <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200">
-          <h3 className="text-lg font-medium text-slate-900">
-            Все пользователи ({users.length})
-          </h3>
-        </div>
-        <div className="divide-y divide-slate-200">
-          {users.map((user) => (
-            <div
-              key={user.$id}
-              className="px-6 py-4 flex items-center justify-between"
-            >
-              <div className="flex items-center space-x-4">
-                <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center">
-                  <span className="text-sm font-medium text-slate-600">
-                    {user.name.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-slate-900">
-                    {user.name}
-                  </p>
-                  <p className="text-sm text-slate-500">{user.email}</p>
-                </div>
-                <span
-                  className={`px-2 py-1 text-xs font-medium rounded-full ${
-                    user.role === UserRole.ADMIN
-                      ? "bg-red-100 text-red-800"
-                      : user.role === UserRole.TEACHER
-                      ? "bg-blue-100 text-blue-800"
-                      : "bg-purple-100 text-purple-800"
-                  }`}
-                >
-                  {getRoleLabel(user.role)}
-                </span>
-              </div>
-              <div className="flex items-center space-x-2">
-                {user.isActive ? (
-                  <span className="flex items-center text-emerald-600">
-                    <UserCheck className="w-4 h-4 mr-1" />
-                    Активен
-                  </span>
-                ) : (
-                  <span className="flex items-center text-yellow-600">
-                    <UserX className="w-4 h-4 mr-1" />
-                    Ожидает активации
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
