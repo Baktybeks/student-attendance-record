@@ -12,6 +12,7 @@ import {
   WeekDay,
   BaseDocument,
 } from "@/types";
+import { createHash } from "crypto";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // API функции для работы с занятиями
@@ -224,6 +225,10 @@ export const classApi = {
           const subject = subjectsMap.get(schedule.subjectId);
           const group = groupsMap.get(schedule.groupId);
           const teacher = usersMap.get(schedule.teacherId);
+          const hash = createHash("md5")
+            .update(`${schedule.$id}-${date}`)
+            .digest("hex")
+            .slice(0, 32); // md5 = 32 символа
 
           return {
             $id: `virtual-${schedule.$id}-${date}`,
