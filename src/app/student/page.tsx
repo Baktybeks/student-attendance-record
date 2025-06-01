@@ -1,17 +1,11 @@
-// src/app/student/page.tsx (Финальная версия)
+// src/app/student/page.tsx (Обновленная версия - только данные из бэкенда)
 
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { useAuthStore } from "@/store/authStore";
-import {
-  useStudentAttendanceStats,
-  useStudentAttendance,
-} from "@/services/attendanceService";
-import { useSubjectsForGroup } from "@/services/subjectService";
-import { useGroupById } from "@/services/groupeServise";
+import { useStudentData } from "@/hooks/useStudentData"; // Используем обновленный хук
 import { useUsersByRole } from "@/services/authService";
-import { UserRole, WeekDay } from "@/types";
+import { UserRole } from "@/types";
 import {
   Calendar,
   BarChart3,
@@ -20,61 +14,37 @@ import {
   GraduationCap,
 } from "lucide-react";
 import { LogoutButton } from "@/components/LogoutButton";
-import { getWeekDates, getWeekDayFromDate } from "@/utils/dates";
-import { getScheduleBySpecialization } from "@/data/mockSchedule";
 
 // Импортируем компоненты вкладок
 import { OverviewTab } from "@/components/student/OverviewTab";
 import { ScheduleTab } from "@/components/student/ScheduleTab";
 import { AttendanceTab } from "@/components/student/AttendanceTab";
 import { ProfileTab } from "@/components/student/ProfileTab";
+import { NoScheduleData } from "@/components/student/NoScheduleData"; // Новый компонент
 
 type TabType = "overview" | "schedule" | "attendance" | "profile";
 
 export default function StudentDashboard() {
-  const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<TabType>("overview");
 
-  // Получаем данные студента
-  const { data: group } = useGroupById(user?.groupId || "");
-  const { data: subjects = [] } = useSubjectsForGroup(user?.groupId || "");
+  // Получаем все данные студента через единый хук
+  const {
+    user,
+    group,
+    subjects,
+    weekSchedule,
+    todaysSchedule,
+    weekDates,
+    today,
+    attendanceStats,
+    attendanceHistory,
+    isLoading,
+    hasScheduleData,
+    noScheduleData,
+  } = useStudentData();
+
+  // Получаем преподавателей (для справочной информации)
   const { data: teachers = [] } = useUsersByRole(UserRole.TEACHER);
-  const { data: attendanceStats } = useStudentAttendanceStats(user?.$id || "");
-  const { data: attendanceHistory = [] } = useStudentAttendance(
-    user?.$id || ""
-  );
-
-  // Получаем данные для текущей недели
-  const today = new Date();
-  const weekDates = getWeekDates(today);
-
-  // Генерируем расписание на основе специализации группы
-  const weekSchedule = useMemo(() => {
-    // Проверяем, есть ли реальные данные из API
-    if (subjects.length > 0) {
-      // TODO: Здесь будет логика для создания расписания из реальных данных
-      console.log(
-        "Найдены предметы:",
-        subjects.map((s) => s.name)
-      );
-    }
-
-    // Генерируем расписание на основе специализации группы
-    const schedule = getScheduleBySpecialization(group?.specialization);
-    console.log(
-      "Сгенерировано расписание для специализации:",
-      group?.specialization
-    );
-    return schedule;
-  }, [subjects, group?.specialization]);
-
-  // Получаем расписание на сегодня
-  const todaysSchedule = useMemo(() => {
-    const todayWeekDay = getWeekDayFromDate(today);
-    const schedule = weekSchedule[todayWeekDay] || [];
-    console.log(`Расписание на сегодня (${todayWeekDay}):`, schedule);
-    return schedule;
-  }, [weekSchedule, today]);
 
   const tabs = [
     {
@@ -88,7 +58,7 @@ export default function StudentDashboard() {
       key: "schedule" as const,
       label: "Расписание",
       icon: Calendar,
-      count: undefined,
+      count: hasScheduleData ? undefined : 0,
       description: "Расписание занятий на неделю",
     },
     {
@@ -109,6 +79,21 @@ export default function StudentDashboard() {
   ];
 
   const renderTabContent = () => {
+    // Показываем состояние загрузки только для вкладки расписания
+    if (activeTab === "schedule" && isLoading) {
+      return <NoScheduleData isLoading={true} />;
+    }
+
+    // Показываем сообщение об отсутствии расписания только для вкладки расписания
+    if (activeTab === "schedule" && noScheduleData) {
+      return (
+        <NoScheduleData
+          groupName={group?.name}
+          onRefresh={() => window.location.reload()}
+        />
+      );
+    }
+
     switch (activeTab) {
       case "overview":
         return (
@@ -151,6 +136,14 @@ export default function StudentDashboard() {
     }
   };
 
+  // Показываем индикатор загрузки в заголовке если данные загружаются
+  const scheduleStatus = useMemo(() => {
+    if (isLoading) return "Загрузка...";
+    if (noScheduleData) return "Нет расписания";
+    if (hasScheduleData) return "Активно";
+    return "Неизвестно";
+  }, [isLoading, noScheduleData, hasScheduleData]);
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Хедер */}
@@ -177,7 +170,7 @@ export default function StudentDashboard() {
             <div className="flex items-center space-x-4">
               <div className="text-right">
                 <p className="text-sm font-medium text-slate-900">
-                  {user?.name}
+                  {user?.name || "Загрузка..."}
                 </p>
                 <p className="text-xs text-slate-500">
                   Студент • {group?.code || "Группа не назначена"}
@@ -217,6 +210,10 @@ export default function StudentDashboard() {
                     {count}
                   </span>
                 )}
+                {/* Показываем индикатор загрузки для расписания */}
+                {key === "schedule" && isLoading && (
+                  <div className="ml-1 w-3 h-3 border border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                )}
               </button>
             ))}
           </div>
@@ -235,6 +232,13 @@ export default function StudentDashboard() {
           <div>Занятий сегодня: {todaysSchedule.length}</div>
           <div>Группа: {group?.code || "Не назначена"}</div>
           <div>Специализация: {group?.specialization || "Не указана"}</div>
+          <div>Статус расписания: {scheduleStatus}</div>
+          <div>Предметов: {subjects.length}</div>
+          <div className="mt-2 pt-2 border-t border-slate-600">
+            <div>Загрузка: {isLoading ? "Да" : "Нет"}</div>
+            <div>Есть расписание: {hasScheduleData ? "Да" : "Нет"}</div>
+            <div>Нет данных: {noScheduleData ? "Да" : "Нет"}</div>
+          </div>
         </div>
       )}
     </div>

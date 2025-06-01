@@ -1,16 +1,30 @@
 // src/hooks/useStudentData.ts
 
+// src/hooks/useStudentData.ts
+
 import { useMemo } from "react";
 import { useAuthStore } from "@/store/authStore";
 import {
   useStudentAttendanceStats,
   useStudentAttendance,
-} from "@/services/attendanceService";
-import { useSubjectsForGroup } from "@/services/subjectService";
+} from "@/services/attendanceService"; // Используем существующий сервис
+import { useSubjectsForGroup } from "@/services/subjectService"; // Используем существующий сервис
 import { useGroupById } from "@/services/groupeServise";
-import { getScheduleBySpecialization } from "@/data/mockSchedule";
+import { useScheduleByGroup } from "@/services/scheduleService";
+import { useTeachersMap } from "@/hooks/useTeachers"; // Используем ваш существующий хук
 import { getWeekDates, getWeekDayFromDate } from "@/utils/dates";
-import { WeekDay } from "@/types";
+import { WeekDay, Schedule, Subject, User } from "@/types";
+
+// Интерфейс для преобразованного расписания
+interface TransformedScheduleItem {
+  time: string;
+  subject: string;
+  teacher: string;
+  classroom: string;
+  type: "Лекция" | "Практика" | "Лабораторная" | "Семинар";
+}
+
+type TransformedWeekSchedule = Record<WeekDay, TransformedScheduleItem[]>;
 
 /**
  * Хук для получения всех данных студента
@@ -30,10 +44,27 @@ export function useStudentData() {
   const { data: attendanceHistory = [], isLoading: historyLoading } =
     useStudentAttendance(user?.$id || "");
 
-  // Расписание
+  // Реальные данные расписания из API
+  const { data: realScheduleData = [], isLoading: scheduleLoading } =
+    useScheduleByGroup(user?.groupId || "");
+
+  // Получаем уникальные ID преподавателей из расписания
+  const teacherIds = useMemo(() => {
+    return [...new Set(realScheduleData.map((schedule) => schedule.teacherId))];
+  }, [realScheduleData]);
+
+  // Получаем карту преподавателей (id -> name)
+  const teachersMap = useTeachersMap(teacherIds);
+
+  // Преобразование расписания в нужный формат
   const weekSchedule = useMemo(() => {
-    return getScheduleBySpecialization(group?.specialization);
-  }, [group?.specialization]);
+    // Используем только реальные данные из API
+    return transformScheduleToWeekFormat(
+      realScheduleData,
+      subjects,
+      teachersMap
+    );
+  }, [realScheduleData, subjects, teachersMap]);
 
   const todaysSchedule = useMemo(() => {
     const todayWeekDay = getWeekDayFromDate(today);
@@ -66,7 +97,11 @@ export function useStudentData() {
   }, [attendanceStats]);
 
   const isLoading =
-    groupLoading || subjectsLoading || statsLoading || historyLoading;
+    groupLoading ||
+    subjectsLoading ||
+    statsLoading ||
+    historyLoading ||
+    scheduleLoading;
 
   return {
     // Пользователь и группа
@@ -91,6 +126,8 @@ export function useStudentData() {
     hasScheduleToday: todaysSchedule.length > 0,
     hasAttendanceData: attendanceHistory.length > 0,
     isGroupAssigned: !!group,
+    hasScheduleData: realScheduleData.length > 0, // Есть ли данные расписания
+    noScheduleData: !scheduleLoading && realScheduleData.length === 0, // Нет данных после загрузки
   };
 }
 
@@ -98,12 +135,31 @@ export function useStudentData() {
  * Хук для работы с расписанием
  */
 export function useStudentSchedule() {
-  const { group } = useAuthStore();
+  const { user } = useAuthStore();
+  const { data: group } = useGroupById(user?.groupId || "");
+  const { data: subjects = [] } = useSubjectsForGroup(user?.groupId || "");
+  const { data: realScheduleData = [] } = useScheduleByGroup(
+    user?.groupId || ""
+  );
+
+  // Получаем уникальные ID преподавателей из расписания
+  const teacherIds = useMemo(() => {
+    return [...new Set(realScheduleData.map((schedule) => schedule.teacherId))];
+  }, [realScheduleData]);
+
+  // Получаем карту преподавателей (id -> name)
+  const teachersMap = useTeachersMap(teacherIds);
+
   const today = new Date();
 
   const weekSchedule = useMemo(() => {
-    return getScheduleBySpecialization(group?.specialization);
-  }, [group?.specialization]);
+    // Используем только реальные данные из API
+    return transformScheduleToWeekFormat(
+      realScheduleData,
+      subjects,
+      teachersMap
+    );
+  }, [realScheduleData, subjects, teachersMap]);
 
   const getScheduleForDay = (day: WeekDay) => {
     return weekSchedule[day] || [];
@@ -163,6 +219,88 @@ export function useStudentSchedule() {
     getScheduleForDay,
     getScheduleForDate,
   };
+}
+
+/**
+ * Функция для преобразования данных расписания из API в формат для UI
+ */
+function transformScheduleToWeekFormat(
+  scheduleData: Schedule[],
+  subjects: Subject[],
+  teachersMap: Map<string, string>
+): TransformedWeekSchedule {
+  // Инициализируем пустое расписание
+  const weekSchedule: TransformedWeekSchedule = {
+    [WeekDay.MONDAY]: [],
+    [WeekDay.TUESDAY]: [],
+    [WeekDay.WEDNESDAY]: [],
+    [WeekDay.THURSDAY]: [],
+    [WeekDay.FRIDAY]: [],
+    [WeekDay.SATURDAY]: [],
+    [WeekDay.SUNDAY]: [],
+  };
+
+  // Если нет данных, возвращаем пустое расписание
+  if (!scheduleData || scheduleData.length === 0) {
+    return weekSchedule;
+  }
+
+  scheduleData.forEach((schedule) => {
+    // Находим предмет по ID
+    const subject = subjects.find((s) => s.$id === schedule.subjectId);
+
+    // Получаем имя преподавателя из карты
+    const teacherName =
+      teachersMap.get(schedule.teacherId) || "Преподаватель не назначен";
+
+    // Определяем тип занятия (можно расширить логику)
+    const lessonType = determineLessonType(subject?.name || "");
+
+    const transformedItem: TransformedScheduleItem = {
+      time: `${schedule.startTime}-${schedule.endTime}`,
+      subject: subject?.name || "Предмет не найден",
+      teacher: teacherName,
+      classroom: schedule.classroom,
+      type: lessonType,
+    };
+
+    weekSchedule[schedule.dayOfWeek].push(transformedItem);
+  });
+
+  // Сортируем расписание по времени для каждого дня
+  Object.keys(weekSchedule).forEach((day) => {
+    weekSchedule[day as WeekDay].sort((a, b) => {
+      const timeA = a.time.split("-")[0];
+      const timeB = b.time.split("-")[0];
+      return timeA.localeCompare(timeB);
+    });
+  });
+
+  return weekSchedule;
+}
+
+/**
+ * Определение типа занятия по названию предмета
+ */
+function determineLessonType(
+  subjectName: string
+): "Лекция" | "Практика" | "Лабораторная" | "Семинар" {
+  const name = subjectName.toLowerCase();
+
+  if (name.includes("лабораторная") || name.includes("лаб.")) {
+    return "Лабораторная";
+  }
+
+  if (name.includes("практика") || name.includes("практическая")) {
+    return "Практика";
+  }
+
+  if (name.includes("семинар")) {
+    return "Семинар";
+  }
+
+  // По умолчанию - лекция
+  return "Лекция";
 }
 
 /**
