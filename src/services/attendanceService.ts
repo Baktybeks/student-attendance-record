@@ -9,6 +9,7 @@ import {
   ClassWithDetails,
   StudentAttendanceStats,
   AttendanceStatus,
+  BaseDocument, // ИСПРАВЛЕНО: импорт из types
 } from "@/types";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
