@@ -3,11 +3,12 @@
 "use client";
 
 import React, { useState } from "react";
-import { Calendar, CheckCircle, BarChart3 } from "lucide-react";
+import { Calendar, CheckCircle, BarChart3, RefreshCw } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
-import { useClasses } from "@/services/attendanceService";
-import { AttendanceStatus } from "@/types";
+import { useClassesWithDetails } from "@/services/classService";
+import { AttendanceStatus, ClassWithDetails } from "@/types";
 import { ClassCard } from "./ClassCard";
+import { AttendanceModalToday } from "./AttendanceModalToday";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Card } from "@/components/ui/Card";
@@ -22,6 +23,7 @@ interface ClassItem {
   classroom: string;
   studentsCount: number;
   attendanceMarked: boolean;
+  groupId?: string; // Добавляем для модального окна
   stats?: {
     present: number;
     absent: number;
@@ -39,13 +41,21 @@ export const TodayTab: React.FC = () => {
   const { user } = useAuthStore();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showMockData, setShowMockData] = useState(false);
+  const [attendanceModal, setAttendanceModal] = useState<{
+    isOpen: boolean;
+    classItem: ClassItem | null;
+  }>({
+    isOpen: false,
+    classItem: null,
+  });
 
   // Получаем занятия преподавателя на выбранную дату
   const {
     data: todaysClasses = [],
     isLoading,
     error,
-  } = useClasses({
+    refetch,
+  } = useClassesWithDetails({
     teacherId: user?.$id,
     date: selectedDate.toISOString().split("T")[0],
   });
@@ -56,6 +66,7 @@ export const TodayTab: React.FC = () => {
       id: "mock-1",
       subject: "Математический анализ",
       group: "ИТ-301",
+      groupId: "mock-group-1", // Добавляем groupId для тестирования
       time: "09:00 - 10:30",
       classroom: "Аудитория 205",
       studentsCount: 25,
@@ -77,6 +88,7 @@ export const TodayTab: React.FC = () => {
       id: "mock-2",
       subject: "Линейная алгебра",
       group: "ИТ-301",
+      groupId: "mock-group-1", // Добавляем groupId для тестирования
       time: "11:45 - 13:15",
       classroom: "Аудитория 307",
       studentsCount: 25,
@@ -97,98 +109,64 @@ export const TodayTab: React.FC = () => {
   ];
 
   // Функция преобразования ClassWithDetails в ClassItem
-  const convertToClassItem = (classData: any): ClassItem | null => {
-    console.log("Converting class data:", classData);
+  const convertToClassItem = (classData: ClassWithDetails): ClassItem => {
+    console.log("🔄 Конвертируем занятие:", classData);
 
-    try {
-      // Проверяем разные возможные структуры данных
-      let subject = "Неизвестный предмет";
-      let group = "Неизвестная группа";
-      let time = "Время не указано";
-      let classroom = "Не указана";
+    // Извлекаем данные из правильно структурированного объекта
+    const subject = classData.schedule?.subject?.name || "Неизвестный предмет";
+    const group =
+      classData.schedule?.group?.name ||
+      classData.schedule?.group?.code ||
+      "Неизвестная группа";
+    const time = `${classData.startTime} - ${classData.endTime}`;
+    const classroom = classData.classroom || "Не указана";
 
-      // Вариант 1: Данные с вложенным schedule
-      if (classData.schedule) {
-        subject =
-          classData.schedule.subject?.name ||
-          classData.schedule.subjectName ||
-          subject;
-        group =
-          classData.schedule.group?.name ||
-          classData.schedule.groupName ||
-          group;
-      }
-      // Вариант 2: Данные с прямыми полями
-      else if (classData.subjectId || classData.subjectName) {
-        subject =
-          classData.subjectName ||
-          classData.subject?.name ||
-          classData.subjectId;
-        group =
-          classData.groupName || classData.group?.name || classData.groupId;
-      }
-      // Вариант 3: Уже готовые данные
-      else if (classData.subject) {
-        subject = classData.subject;
-        group = classData.group;
-      }
+    // Получаем количество студентов из группы
+    const studentsCount = classData.schedule?.group?.studentsCount || 25;
 
-      // Обработка времени
-      if (classData.startTime && classData.endTime) {
-        time = `${classData.startTime} - ${classData.endTime}`;
-      } else if (classData.time) {
-        time = classData.time;
-      }
+    const result: ClassItem = {
+      id: classData.$id,
+      subject,
+      group,
+      time,
+      classroom,
+      studentsCount,
+      attendanceMarked: classData.isCompleted || false,
+      groupId: classData.groupId, // Добавляем groupId для модального окна
+      stats: {
+        present: 0,
+        absent: 0,
+        late: 0,
+        total: studentsCount,
+        percentage: 0,
+      },
+      recentAttendance: [],
+    };
 
-      // Обработка аудитории
-      if (classData.classroom) {
-        classroom = classData.classroom;
-      }
-
-      const result: ClassItem = {
-        id: classData.$id || classData.id || Math.random().toString(),
-        subject,
-        group,
-        time,
-        classroom,
-        studentsCount: classData.studentsCount || 25,
-        attendanceMarked:
-          classData.isCompleted || classData.attendanceMarked || false,
-        stats: {
-          present: 0,
-          absent: 0,
-          late: 0,
-          total: classData.studentsCount || 25,
-          percentage: 0,
-        },
-        recentAttendance: [],
-      };
-
-      console.log("Converted to ClassItem:", result);
-      return result;
-    } catch (error) {
-      console.error("Error converting class data:", error, classData);
-      return null;
-    }
+    console.log("✅ Конвертировано в ClassItem:", result);
+    return result;
   };
 
   // Используем реальные данные из API или mock данные для тестирования
-  const convertedClasses = todaysClasses
-    .map(convertToClassItem)
-    .filter((item): item is ClassItem => item !== null);
+  const convertedClasses = todaysClasses.map(convertToClassItem);
 
   const currentClasses: ClassItem[] = showMockData
     ? mockClasses
     : convertedClasses;
 
   console.log("=== DEBUG INFO ===");
-  console.log("Selected date:", selectedDate.toISOString().split("T")[0]);
-  console.log("Raw API data:", todaysClasses);
-  console.log("Converted classes:", convertedClasses);
-  console.log("Using mock data:", showMockData);
-  console.log("Final classes to show:", currentClasses);
-  console.log("Is loading:", isLoading);
-  console.log("API Error:", error);
+  console.log("👤 Пользователь ID:", user?.$id);
+  console.log("📅 Выбранная дата:", selectedDate.toISOString().split("T")[0]);
+  console.log(
+    "🌍 День недели:",
+    selectedDate.toLocaleDateString("ru-RU", { weekday: "long" })
+  );
+  console.log("📚 Сырые данные API:", todaysClasses);
+  console.log("🔄 Конвертированные занятия:", convertedClasses);
+  console.log("🎭 Используем mock данные:", showMockData);
+  console.log("📊 Финальные занятия для отображения:", currentClasses);
+  console.log("⏳ Загрузка:", isLoading);
+  console.log("❌ Ошибка API:", error);
 
   // Функция для изменения даты
   const changeDate = (days: number) => {
@@ -201,18 +179,48 @@ export const TodayTab: React.FC = () => {
   const isToday = selectedDate.toDateString() === new Date().toDateString();
 
   const handleMarkAttendance = (classId: string) => {
-    console.log("Marking attendance for class:", classId);
-    // Здесь будет логика отметки посещаемости
+    console.log(
+      "📝 Открытие модального окна посещаемости для занятия:",
+      classId
+    );
+
+    const classItem = currentClasses.find((cls) => cls.id === classId);
+    if (classItem) {
+      setAttendanceModal({
+        isOpen: true,
+        classItem,
+      });
+    } else {
+      console.error("❌ Занятие не найдено:", classId);
+    }
+  };
+
+  const handleCloseAttendanceModal = () => {
+    setAttendanceModal({
+      isOpen: false,
+      classItem: null,
+    });
+  };
+
+  const handleSaveAttendance = () => {
+    console.log("✅ Посещаемость сохранена, обновляем данные");
+    // Обновляем данные после сохранения
+    refetch();
   };
 
   const handleViewDetails = (classId: string) => {
-    console.log("Viewing details for class:", classId);
+    console.log("👁️ Просмотр деталей занятия:", classId);
     // Здесь будет логика просмотра деталей
   };
 
   const handleExportData = (classId: string) => {
-    console.log("Exporting data for class:", classId);
+    console.log("📤 Экспорт данных для занятия:", classId);
     // Здесь будет логика экспорта
+  };
+
+  const handleRefresh = () => {
+    console.log("🔄 Обновление данных...");
+    refetch();
   };
 
   return (
@@ -240,6 +248,21 @@ export const TodayTab: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center space-x-4">
+          {/* Кнопка обновления */}
+          <Button
+            variant="outline"
+            size="sm"
+            icon={
+              <RefreshCw
+                className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`}
+              />
+            }
+            onClick={handleRefresh}
+            disabled={isLoading}
+          >
+            Обновить
+          </Button>
+
           {/* Навигация по датам */}
           <div className="flex items-center space-x-2">
             <Button variant="outline" size="sm" onClick={() => changeDate(-1)}>
@@ -268,7 +291,7 @@ export const TodayTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Занятия на сегодня */}
+      {/* Занятия на выбранную дату */}
       {isLoading ? (
         <div className="space-y-8">
           <div className="animate-pulse">
@@ -297,41 +320,14 @@ export const TodayTab: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-slate-600">
-                    Студентов присутствует
+                    Всего занятий
                   </p>
                   <p className="text-2xl font-bold text-slate-900 mt-1">
-                    {currentClasses.reduce(
-                      (sum, cls) => sum + (cls.stats?.present || 0),
-                      0
-                    )}
+                    {currentClasses.length}
                   </p>
                 </div>
-                <div className="p-3 bg-emerald-100 rounded-lg">
-                  <CheckCircle className="w-6 h-6 text-emerald-600" />
-                </div>
-              </div>
-            </Card>
-
-            <Card padding="md" hover>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-slate-600">
-                    Средняя посещаемость
-                  </p>
-                  <p className="text-2xl font-bold text-slate-900 mt-1">
-                    {currentClasses.length > 0
-                      ? Math.round(
-                          currentClasses.reduce(
-                            (sum, cls) => sum + (cls.stats?.percentage || 0),
-                            0
-                          ) / currentClasses.length
-                        )
-                      : 0}
-                    %
-                  </p>
-                </div>
-                <div className="p-3 bg-purple-100 rounded-lg">
-                  <BarChart3 className="w-6 h-6 text-purple-600" />
+                <div className="p-3 bg-blue-100 rounded-lg">
+                  <Calendar className="w-6 h-6 text-blue-600" />
                 </div>
               </div>
             </Card>
@@ -350,8 +346,27 @@ export const TodayTab: React.FC = () => {
                     / {currentClasses.length}
                   </p>
                 </div>
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <Calendar className="w-6 h-6 text-blue-600" />
+                <div className="p-3 bg-emerald-100 rounded-lg">
+                  <CheckCircle className="w-6 h-6 text-emerald-600" />
+                </div>
+              </div>
+            </Card>
+
+            <Card padding="md" hover>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-600">
+                    Всего студентов
+                  </p>
+                  <p className="text-2xl font-bold text-slate-900 mt-1">
+                    {currentClasses.reduce(
+                      (sum, cls) => sum + cls.studentsCount,
+                      0
+                    )}
+                  </p>
+                </div>
+                <div className="p-3 bg-purple-100 rounded-lg">
+                  <BarChart3 className="w-6 h-6 text-purple-600" />
                 </div>
               </div>
             </Card>
@@ -361,60 +376,71 @@ export const TodayTab: React.FC = () => {
         <div className="space-y-4">
           <EmptyState
             icon={<Calendar className="w-12 h-12 text-slate-400" />}
-            title={
-              convertedClasses.length === 0 && !isLoading
-                ? "Нет занятий на эту дату"
-                : "Свободный день"
-            }
+            title={error ? "Ошибка загрузки данных" : "Нет занятий на эту дату"}
             description={
-              convertedClasses.length === 0 && !isLoading
-                ? `На ${
-                    isToday ? "сегодня" : "эту дату"
-                  } у вас нет запланированных занятий в системе. ${
-                    selectedDate.getDay() === 0 || selectedDate.getDay() === 6
-                      ? "Это выходной день."
-                      : "Проверьте расписание или обратитесь к администратору."
+              error
+                ? `Произошла ошибка при загрузке данных: ${
+                    error.message || "Неизвестная ошибка"
                   }`
                 : `На ${
                     isToday ? "сегодня" : "эту дату"
-                  } у вас нет запланированных занятий. Хорошего отдыха!`
+                  } у вас нет запланированных занятий. ${
+                    selectedDate.getDay() === 0 || selectedDate.getDay() === 6
+                      ? "Это выходной день."
+                      : "Проверьте расписание или попробуйте другую дату."
+                  }`
             }
             action={{
-              label: "Показать тестовые данные",
-              onClick: () => setShowMockData(true),
+              label: showMockData
+                ? "Скрыть тестовые данные"
+                : "Показать тестовые данные",
+              onClick: () => setShowMockData(!showMockData),
             }}
-            secondaryAction={{
-              label: "Проверить другую дату",
-              onClick: () => changeDate(1),
-            }}
+            secondaryAction={
+              error
+                ? {
+                    label: "Попробовать снова",
+                    onClick: handleRefresh,
+                  }
+                : {
+                    label: "Проверить другую дату",
+                    onClick: () => changeDate(1),
+                  }
+            }
           />
 
           {/* Панель диагностики */}
           <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
             <h4 className="font-medium text-blue-900 mb-3">
-              🔍 Диагностика проблемы
+              🔍 Информация о загрузке данных
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="font-medium text-blue-800 mb-2">
-                  Возможные причины:
+                  Статус системы:
                 </p>
                 <ul className="text-blue-700 space-y-1 text-xs">
                   <li>
-                    •{" "}
-                    {selectedDate.getDay() === 0 || selectedDate.getDay() === 6
-                      ? "Выходной день (суббота/воскресенье)"
-                      : "Нет занятий в этот день"}
+                    • Пользователь: {user?.name || "Не определен"} (
+                    {user?.role || "Без роли"})
                   </li>
-                  <li>• Расписание не создано в системе</li>
-                  <li>• Преподаватель не назначен на занятия</li>
-                  <li>• Проблема с API запросом</li>
+                  <li>
+                    • День недели:{" "}
+                    {selectedDate.toLocaleDateString("ru-RU", {
+                      weekday: "long",
+                    })}
+                  </li>
+                  <li>
+                    • Тип дня:{" "}
+                    {selectedDate.getDay() === 0 || selectedDate.getDay() === 6
+                      ? "Выходной"
+                      : "Рабочий"}
+                  </li>
+                  <li>• Занятий в базе: {convertedClasses.length}</li>
                 </ul>
               </div>
               <div>
-                <p className="font-medium text-blue-800 mb-2">
-                  Что можно сделать:
-                </p>
+                <p className="font-medium text-blue-800 mb-2">Действия:</p>
                 <div className="space-y-2">
                   <Button
                     variant="outline"
@@ -430,7 +456,9 @@ export const TodayTab: React.FC = () => {
                       )
                     }
                   >
-                    Проверить следующий рабочий день
+                    {selectedDate.getDay() === 0 || selectedDate.getDay() === 6
+                      ? "Перейти к понедельнику"
+                      : "Проверить следующий день"}
                   </Button>
                   <Button
                     variant="outline"
@@ -438,7 +466,7 @@ export const TodayTab: React.FC = () => {
                     fullWidth
                     onClick={() => setShowMockData(true)}
                   >
-                    Тестировать с примерами
+                    Протестировать интерфейс
                   </Button>
                 </div>
               </div>
@@ -449,45 +477,51 @@ export const TodayTab: React.FC = () => {
           <details className="mt-4">
             <summary className="cursor-pointer p-4 bg-gray-100 rounded-lg hover:bg-gray-200">
               <span className="font-medium text-gray-900">
-                📋 Техническая информация
+                🔧 Техническая информация (для разработчика)
               </span>
             </summary>
             <div className="mt-2 p-4 bg-gray-50 rounded-lg">
               <div className="text-sm text-gray-600 space-y-2">
                 <div>
-                  <strong>Пользователь ID:</strong> {user?.$id || "не найден"}
+                  <strong>ID пользователя:</strong>{" "}
+                  {user?.$id || "❌ Не найден"}
                 </div>
                 <div>
                   <strong>Дата запроса:</strong>{" "}
                   {selectedDate.toISOString().split("T")[0]}
                 </div>
                 <div>
-                  <strong>День недели:</strong>{" "}
-                  {selectedDate.toLocaleDateString("ru-RU", {
-                    weekday: "long",
-                  })}
+                  <strong>Загрузка:</strong> {isLoading ? "✅ Да" : "❌ Нет"}
                 </div>
                 <div>
-                  <strong>Загрузка:</strong> {isLoading ? "да" : "нет"}
+                  <strong>Ошибка:</strong>{" "}
+                  {error ? `❌ ${error.message}` : "✅ Нет"}
                 </div>
                 <div>
-                  <strong>Ошибка API:</strong> {error ? error.message : "нет"}
+                  <strong>Сырых занятий из API:</strong> {todaysClasses.length}
                 </div>
                 <div>
-                  <strong>Занятий из API:</strong> {todaysClasses.length}
-                </div>
-                <div>
-                  <strong>Успешно конвертировано:</strong>{" "}
-                  {convertedClasses.length}
+                  <strong>Успешно обработано:</strong> {convertedClasses.length}
                 </div>
 
                 {todaysClasses.length > 0 && (
-                  <details className="mt-2">
-                    <summary className="cursor-pointer font-medium">
-                      Сырые данные API
+                  <details className="mt-3">
+                    <summary className="cursor-pointer font-medium text-blue-600">
+                      📋 Показать сырые данные API
                     </summary>
-                    <pre className="mt-2 text-xs bg-white p-2 rounded overflow-auto max-h-40 border">
+                    <pre className="mt-2 text-xs bg-white p-3 rounded overflow-auto max-h-60 border border-gray-200">
                       {JSON.stringify(todaysClasses, null, 2)}
+                    </pre>
+                  </details>
+                )}
+
+                {convertedClasses.length > 0 && (
+                  <details className="mt-3">
+                    <summary className="cursor-pointer font-medium text-green-600">
+                      ✅ Показать обработанные данные
+                    </summary>
+                    <pre className="mt-2 text-xs bg-white p-3 rounded overflow-auto max-h-60 border border-gray-200">
+                      {JSON.stringify(convertedClasses, null, 2)}
                     </pre>
                   </details>
                 )}
@@ -495,6 +529,16 @@ export const TodayTab: React.FC = () => {
             </div>
           </details>
         </div>
+      )}
+
+      {/* Модальное окно для отметки посещаемости */}
+      {attendanceModal.isOpen && attendanceModal.classItem && (
+        <AttendanceModalToday
+          classItem={attendanceModal.classItem}
+          isOpen={attendanceModal.isOpen}
+          onClose={handleCloseAttendanceModal}
+          onSave={handleSaveAttendance}
+        />
       )}
     </div>
   );

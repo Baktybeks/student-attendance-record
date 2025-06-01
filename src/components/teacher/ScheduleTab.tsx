@@ -14,7 +14,6 @@ import {
   Download,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
-import { useScheduleByTeacher } from "@/services/scheduleService";
 import { WeekDay, getWeekDayLabel } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -23,18 +22,10 @@ import { EmptyState, ComingSoonState } from "@/components/ui/EmptyState";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { Badge } from "@/components/ui/Badge";
 import { getWeekDates, formatDate } from "@/utils/dates";
-
-// Локальный интерфейс для элементов расписания с нужными свойствами
-interface ScheduleItem {
-  id: string;
-  subject: string;
-  group: string;
-  time: string;
-  classroom: string;
-  dayOfWeek: WeekDay;
-  weekType: "all" | "odd" | "even";
-  type?: "lecture" | "seminar" | "practice" | "lab";
-}
+import {
+  useScheduleWithDetails,
+  ScheduleItemWithDetails,
+} from "@/hooks/useScheduleWithDetails";
 
 export const ScheduleTab: React.FC = () => {
   const { user } = useAuthStore();
@@ -42,86 +33,13 @@ export const ScheduleTab: React.FC = () => {
   const [viewMode, setViewMode] = useState<"week" | "month">("week");
   const [selectedGroup, setSelectedGroup] = useState<string>("all");
 
-  // Получаем расписание преподавателя
-  const { data: schedule = [], isLoading } = useScheduleByTeacher(
-    user?.$id || ""
-  );
-
-  // Примерные данные для демонстрации
-  const mockSchedule: ScheduleItem[] = [
-    {
-      id: "1",
-      subject: "Математический анализ",
-      group: "ИТ-301",
-      time: "09:00 - 10:30",
-      classroom: "Аудитория 205",
-      dayOfWeek: WeekDay.MONDAY,
-      weekType: "all",
-      type: "lecture",
-    },
-    {
-      id: "2",
-      subject: "Линейная алгебра",
-      group: "ИТ-301",
-      time: "11:45 - 13:15",
-      classroom: "Аудитория 307",
-      dayOfWeek: WeekDay.MONDAY,
-      weekType: "all",
-      type: "seminar",
-    },
-    {
-      id: "3",
-      subject: "Дискретная математика",
-      group: "ИТ-201",
-      time: "14:00 - 15:30",
-      classroom: "Аудитория 412",
-      dayOfWeek: WeekDay.TUESDAY,
-      weekType: "all",
-      type: "practice",
-    },
-    {
-      id: "4",
-      subject: "Математический анализ",
-      group: "ИТ-301",
-      time: "09:00 - 10:30",
-      classroom: "Аудитория 205",
-      dayOfWeek: WeekDay.WEDNESDAY,
-      weekType: "odd",
-      type: "lecture",
-    },
-    {
-      id: "5",
-      subject: "Численные методы",
-      group: "ИТ-401",
-      time: "15:45 - 17:15",
-      classroom: "Компьютерный класс 1",
-      dayOfWeek: WeekDay.THURSDAY,
-      weekType: "all",
-      type: "lab",
-    },
-  ];
-
-  // Преобразуем данные из Schedule в ScheduleItem если они есть
-  const convertScheduleToScheduleItem = (
-    scheduleData: any[]
-  ): ScheduleItem[] => {
-    return scheduleData.map((item) => ({
-      id: item.$id || item.id,
-      subject: item.subjectId, // В реальном приложении здесь будет название предмета
-      group: item.groupId, // В реальном приложении здесь будет код группы
-      time: `${item.startTime} - ${item.endTime}`,
-      classroom: item.classroom,
-      dayOfWeek: item.dayOfWeek,
-      weekType: item.weekType || "all",
-      type: "lecture", // Значение по умолчанию
-    }));
-  };
-  console.log(schedule, "schedulescheduleschedulescheduleschedule");
-
-  const currentSchedule =
-    schedule.length > 0
-      ? convertScheduleToScheduleItem(schedule)
-      : mockSchedule;
+  // Используем новый хук для получения расписания с деталями
+  const {
+    data: scheduleWithDetails = [],
+    isLoading,
+    subjectsMap,
+    groupsMap,
+  } = useScheduleWithDetails(user?.$id || "");
 
   const weekDates = getWeekDates(currentWeek);
 
@@ -141,8 +59,8 @@ export const ScheduleTab: React.FC = () => {
   // Фильтрация расписания по группе
   const filteredSchedule =
     selectedGroup === "all"
-      ? currentSchedule
-      : currentSchedule.filter((item) => item.group === selectedGroup);
+      ? scheduleWithDetails
+      : scheduleWithDetails.filter((item) => item.groupCode === selectedGroup);
 
   // Группировка расписания по дням недели
   const scheduleByDay = filteredSchedule.reduce((acc, item) => {
@@ -151,7 +69,7 @@ export const ScheduleTab: React.FC = () => {
     }
     acc[item.dayOfWeek].push(item);
     return acc;
-  }, {} as Record<WeekDay, ScheduleItem[]>);
+  }, {} as Record<WeekDay, ScheduleItemWithDetails[]>);
 
   // Сортировка занятий по времени
   Object.keys(scheduleByDay).forEach((day) => {
@@ -160,7 +78,7 @@ export const ScheduleTab: React.FC = () => {
 
   // Получение уникальных групп
   const availableGroups = [
-    ...new Set(currentSchedule.map((item) => item.group)),
+    ...new Set(scheduleWithDetails.map((item) => item.groupCode)),
   ];
 
   const navigateWeek = (direction: "prev" | "next") => {
@@ -379,6 +297,7 @@ export const ScheduleTab: React.FC = () => {
                         >
                           {getTypeLabel(scheduleItem.type)}
                         </Badge>
+
                         {scheduleItem.weekType !== "all" && (
                           <Badge variant="outline" size="sm">
                             {scheduleItem.weekType === "odd" ? "Нечет" : "Чет"}
@@ -462,12 +381,12 @@ export const ScheduleTab: React.FC = () => {
         </div>
       )}
 
-      {/* Отладочная информация для дат */}
+      {/* Отладочная информация для дат и данных */}
       {process.env.NODE_ENV === "development" && (
         <details className="mt-4">
           <summary className="cursor-pointer p-3 bg-yellow-50 rounded-lg border border-yellow-200 hover:bg-yellow-100">
             <span className="font-medium text-yellow-800">
-              🔧 Отладка календаря (только в development)
+              🔧 Отладка календаря и данных (только в development)
             </span>
           </summary>
           <div className="mt-2 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
@@ -482,6 +401,15 @@ export const ScheduleTab: React.FC = () => {
                   day: "numeric",
                   month: "long",
                 })}
+              </div>
+
+              <div className="mt-3">
+                <strong>Загруженные данные:</strong>
+                <div className="ml-2 text-xs">
+                  <div>Расписание: {scheduleWithDetails.length} элементов</div>
+                  <div>Предметы: {subjectsMap.size} элементов</div>
+                  <div>Группы: {groupsMap.size} элементов</div>
+                </div>
               </div>
 
               <div className="mt-3">
@@ -508,6 +436,15 @@ export const ScheduleTab: React.FC = () => {
                     <div key={day} className="mb-1">
                       <span className="font-medium">{day}:</span> {items.length}{" "}
                       занятий
+                      {items.length > 0 && (
+                        <div className="ml-4">
+                          {items.map((item, i) => (
+                            <div key={i}>
+                              {item.subject} ({item.group})
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
