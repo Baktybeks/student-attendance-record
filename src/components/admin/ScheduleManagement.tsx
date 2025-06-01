@@ -1,983 +1,720 @@
-// src/components/admin/ScheduleManagement.tsx
-
 "use client";
 
 import React, { useState } from "react";
-import { useAllGroups } from "@/services/groupeServise";
-import { useAllSubjects } from "@/services/subjectService";
+import {
+  useAllSchedules,
+  useCreateSchedule,
+  useUpdateSchedule,
+  useDeleteSchedule,
+  useScheduleStats,
+} from "@/services/scheduleService";
+import { useActiveGroups } from "@/services/groupeServise";
+import { useActiveSubjects } from "@/services/subjectService";
 import { useUsersByRole } from "@/services/authService";
 import {
-  WeekDay,
-  getWeekDayLabel,
-  UserRole,
   Schedule,
   CreateScheduleDto,
+  WeekDay,
+  WeekDayLabels,
+  UserRole,
 } from "@/types";
 import { TIME_SLOTS, WEEK_TYPES } from "@/utils/constants";
 import {
   Calendar,
+  Clock,
+  MapPin,
   Plus,
-  Search,
-  Filter,
   Edit,
   Trash2,
-  Eye,
-  Clock,
+  Search,
+  Filter,
   Users,
   BookOpen,
-  MapPin,
-  ChevronLeft,
-  ChevronRight,
-  Grid,
-  List,
-  Download,
-  Upload,
+  User,
+  AlertCircle,
+  CheckCircle,
+  XCircle,
+  Eye,
 } from "lucide-react";
 import { toast } from "react-toastify";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
-import { Modal } from "@/components/ui/Modal";
-import { Badge } from "@/components/ui/Badge";
-import { Card } from "@/components/ui/Card";
 
-export const ScheduleManagement: React.FC = () => {
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [selectedWeek, setSelectedWeek] = useState(new Date());
-  const [groupFilter, setGroupFilter] = useState<string>("all");
-  const [teacherFilter, setTeacherFilter] = useState<string>("all");
+export function ScheduleManagement() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedSlot, setSelectedSlot] = useState<{
-    day: WeekDay;
-    timeSlot: (typeof TIME_SLOTS)[0];
-  } | null>(null);
+  const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(
+    null
+  );
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedDay, setSelectedDay] = useState<WeekDay | "all">("all");
+  const [selectedGroup, setSelectedGroup] = useState<string>("all");
 
-  const { data: groups = [] } = useAllGroups();
-  const { data: subjects = [] } = useAllSubjects();
+  // Data fetching
+  const { data: schedules = [], isLoading } = useAllSchedules();
+  const { data: groups = [] } = useActiveGroups();
+  const { data: subjects = [] } = useActiveSubjects();
   const { data: teachers = [] } = useUsersByRole(UserRole.TEACHER);
+  const { data: stats } = useScheduleStats();
 
-  // Мок данные расписания (в реальном приложении будут из API)
-  const [scheduleData, setScheduleData] = useState<Schedule[]>([
-    {
-      $id: "1",
-      $createdAt: new Date().toISOString(),
-      $updatedAt: new Date().toISOString(),
-      $permissions: [],
-      $databaseId: "",
-      $collectionId: "",
-      subjectId: "math-101",
-      groupId: "it-301",
-      teacherId: "teacher-1",
-      dayOfWeek: WeekDay.MONDAY,
-      startTime: "09:00",
-      endTime: "10:30",
-      classroom: "Ауд. 205",
-      weekType: "all",
-      isActive: true,
-    },
-    {
-      $id: "2",
-      $createdAt: new Date().toISOString(),
-      $updatedAt: new Date().toISOString(),
-      $permissions: [],
-      $databaseId: "",
-      $collectionId: "",
-      subjectId: "prog-101",
-      groupId: "it-301",
-      teacherId: "teacher-2",
-      dayOfWeek: WeekDay.TUESDAY,
-      startTime: "11:30",
-      endTime: "13:00",
-      classroom: "Лаб. 3",
-      weekType: "all",
-      isActive: true,
-    },
-  ]);
+  // Mutations
+  const createMutation = useCreateSchedule();
+  const updateMutation = useUpdateSchedule();
+  const deleteMutation = useDeleteSchedule();
 
-  const weekDays = Object.values(WeekDay);
+  // Фильтрация расписаний
+  const filteredSchedules = schedules.filter((schedule) => {
+    const matchesSearch =
+      searchTerm === "" ||
+      schedule.classroom.toLowerCase().includes(searchTerm.toLowerCase());
 
-  const getWeekDates = (date: Date) => {
-    const start = new Date(date);
-    start.setDate(date.getDate() - date.getDay() + 1); // Понедельник
+    const matchesDay =
+      selectedDay === "all" || schedule.dayOfWeek === selectedDay;
+    const matchesGroup =
+      selectedGroup === "all" || schedule.groupId === selectedGroup;
 
-    return Array.from({ length: 7 }, (_, i) => {
-      const day = new Date(start);
-      day.setDate(start.getDate() + i);
-      return day;
-    });
-  };
+    return matchesSearch && matchesDay && matchesGroup;
+  });
 
-  const weekDates = getWeekDates(selectedWeek);
-
-  const getScheduleForSlot = (day: WeekDay, timeSlot: TimeSlot) => {
-    return scheduleData.filter(
-      (item) =>
-        item.dayOfWeek === day &&
-        item.startTime === timeSlot.start &&
-        (groupFilter === "all" || item.groupId === groupFilter) &&
-        (teacherFilter === "all" || item.teacherId === teacherFilter)
-    );
-  };
-
-  const getSubjectName = (subjectId: string) => {
-    const subject = subjects.find((s) => s.$id === subjectId);
-    return subject?.name || "Неизвестный предмет";
-  };
-
-  const getGroupName = (groupId: string) => {
-    const group = groups.find((g) => g.$id === groupId);
-    return group?.code || "Неизвестная группа";
-  };
-
-  const getTeacherName = (teacherId: string) => {
-    const teacher = teachers.find((t) => t.$id === teacherId);
-    return teacher?.name || "Неизвестный преподаватель";
-  };
-
-  const handleCreateSchedule = async (scheduleData: CreateScheduleDto) => {
-    try {
-      // В реальном приложении здесь будет вызов API
-      const newSchedule: Schedule = {
-        $id: Date.now().toString(),
-        $createdAt: new Date().toISOString(),
-        $updatedAt: new Date().toISOString(),
-        $permissions: [],
-        $databaseId: "",
-        $collectionId: "",
-        ...scheduleData,
-        isActive: true,
-      };
-
-      setScheduleData((prev) => [...prev, newSchedule]);
-      toast.success("Занятие добавлено в расписание");
-      setShowCreateModal(false);
-      setSelectedSlot(null);
-    } catch (error: any) {
-      toast.error(`Ошибка создания занятия: ${error.message}`);
-    }
-  };
-
-  const handleDeleteSchedule = (scheduleId: string) => {
-    const scheduleToDelete = scheduleData.find((s) => s.$id === scheduleId);
-    if (!scheduleToDelete) {
-      toast.error("Занятие не найдено");
-      return;
-    }
-
-    const subjectName = getSubjectName(scheduleToDelete.subjectId);
-    const groupName = getGroupName(scheduleToDelete.groupId);
-    const timeStr = `${scheduleToDelete.startTime}-${scheduleToDelete.endTime}`;
-
-    if (
-      !confirm(
-        `Вы уверены, что хотите удалить занятие?\n\n` +
-          `📚 Предмет: ${subjectName}\n` +
-          `👥 Группа: ${groupName}\n` +
-          `🕐 Время: ${timeStr}\n` +
-          `📍 Аудитория: ${scheduleToDelete.classroom}\n\n` +
-          `Это действие нельзя отменить.`
-      )
-    ) {
-      return;
-    }
-
-    try {
-      setScheduleData((prev) => prev.filter((item) => item.$id !== scheduleId));
-      toast.success(`Занятие "${subjectName}" удалено из расписания`);
-    } catch (error) {
-      toast.error("Ошибка при удалении занятия");
-      console.error("Delete error:", error);
-    }
-  };
-
-  const handleBulkDelete = (scheduleIds: string[]) => {
-    if (scheduleIds.length === 0) return;
-
-    const count = scheduleIds.length;
-    if (
-      !confirm(
-        `Удалить ${count} занятий из расписания? Это действие нельзя отменить.`
-      )
-    ) {
-      return;
-    }
-
-    try {
-      setScheduleData((prev) =>
-        prev.filter((item) => !scheduleIds.includes(item.$id))
-      );
-      toast.success(`Удалено ${count} занятий из расписания`);
-    } catch (error) {
-      toast.error("Ошибка при массовом удалении");
-      console.error("Bulk delete error:", error);
-    }
-  };
-
-  const navigateWeek = (direction: "prev" | "next") => {
-    const newDate = new Date(selectedWeek);
-    newDate.setDate(selectedWeek.getDate() + (direction === "next" ? 7 : -7));
-    setSelectedWeek(newDate);
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Заголовок и действия */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900">
-            Управление расписанием
-          </h2>
-          <p className="text-slate-600 mt-1">
-            Планирование и управление учебным расписанием
-          </p>
-        </div>
-        <div className="flex items-center space-x-3">
-          <Button
-            variant="outline"
-            icon={<Upload className="w-4 h-4" />}
-            onClick={() => toast.info("Импорт расписания в разработке")}
-          >
-            Импорт
-          </Button>
-          <Button
-            variant="outline"
-            icon={<Download className="w-4 h-4" />}
-            onClick={() => toast.info("Экспорт расписания в разработке")}
-          >
-            Экспорт
-          </Button>
-          <Button
-            onClick={() => setShowCreateModal(true)}
-            icon={<Plus className="w-4 h-4" />}
-            variant="primary"
-          >
-            Добавить занятие
-          </Button>
-        </div>
-      </div>
-
-      {/* Фильтры и навигация */}
-      <Card padding="md">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            {/* Навигация по неделям */}
-            <div className="flex items-center space-x-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => navigateWeek("prev")}
-                icon={<ChevronLeft className="w-4 h-4" />}
-              />
-              <span className="text-sm font-medium px-4">
-                {weekDates[0].toLocaleDateString("ru-RU", {
-                  day: "numeric",
-                  month: "short",
-                })}{" "}
-                -{" "}
-                {weekDates[6].toLocaleDateString("ru-RU", {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })}
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => navigateWeek("next")}
-                icon={<ChevronRight className="w-4 h-4" />}
-              />
-            </div>
-
-            {/* Фильтры */}
-            <Select
-              value={groupFilter}
-              onChange={(value) => setGroupFilter(value as string)}
-              options={[
-                { value: "all", label: "Все группы" },
-                ...groups
-                  .filter((g) => g.isActive)
-                  .map((group) => ({
-                    value: group.$id,
-                    label: group.code,
-                  })),
-              ]}
-              size="sm"
-            />
-
-            <Select
-              value={teacherFilter}
-              onChange={(value) => setTeacherFilter(value as string)}
-              options={[
-                { value: "all", label: "Все преподаватели" },
-                ...teachers.map((teacher) => ({
-                  value: teacher.$id,
-                  label: teacher.name,
-                })),
-              ]}
-              size="sm"
-            />
-          </div>
-
-          {/* Переключатель вида */}
-          <div className="flex items-center space-x-2">
-            <Button
-              size="sm"
-              variant={viewMode === "grid" ? "primary" : "outline"}
-              onClick={() => setViewMode("grid")}
-              icon={<Grid className="w-4 h-4" />}
-            >
-              Сетка
-            </Button>
-            <Button
-              size="sm"
-              variant={viewMode === "list" ? "primary" : "outline"}
-              onClick={() => setViewMode("list")}
-              icon={<List className="w-4 h-4" />}
-            >
-              Список
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      {/* Расписание */}
-      {viewMode === "grid" ? (
-        <div className="space-y-4">
-          {/* Подсказка для пользователей */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <div className="flex items-start space-x-2">
-              <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center mt-0.5">
-                <span className="text-blue-600 text-xs">💡</span>
-              </div>
-              <div className="text-sm text-blue-800">
-                <p className="font-medium mb-1">Как управлять занятиями:</p>
-                <ul className="text-xs space-y-1 text-blue-700">
-                  <li>
-                    • <strong>Добавить:</strong> Кликните на пустую ячейку в
-                    сетке
-                  </li>
-                  <li>
-                    • <strong>Редактировать/Удалить:</strong> Наведите курсор на
-                    занятие или кликните правой кнопкой
-                  </li>
-                  <li>
-                    • <strong>Быстрое удаление:</strong> Кликните на красную
-                    кнопку корзины при наведении
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          <ScheduleGrid
-            weekDays={weekDays}
-            weekDates={weekDates}
-            timeSlots={TIME_SLOTS}
-            getScheduleForSlot={getScheduleForSlot}
-            getSubjectName={getSubjectName}
-            getGroupName={getGroupName}
-            getTeacherName={getTeacherName}
-            onSlotClick={(day, timeSlot) => {
-              setSelectedSlot({ day, timeSlot });
-              setShowCreateModal(true);
-            }}
-            onScheduleEdit={(schedule) => {
-              // setSelectedSchedule(schedule);
-              // setShowEditModal(true);
-              toast.info("Редактирование в разработке");
-            }}
-            onScheduleDelete={handleDeleteSchedule}
-          />
-        </div>
-      ) : (
-        <ScheduleList
-          scheduleData={scheduleData.filter(
-            (item) =>
-              (groupFilter === "all" || item.groupId === groupFilter) &&
-              (teacherFilter === "all" || item.teacherId === teacherFilter)
-          )}
-          getSubjectName={getSubjectName}
-          getGroupName={getGroupName}
-          getTeacherName={getTeacherName}
-          onScheduleEdit={(schedule) =>
-            toast.info("Редактирование в разработке")
-          }
-          onScheduleDelete={handleDeleteSchedule}
-        />
-      )}
-
-      {/* Модальное окно создания занятия */}
-      <CreateScheduleModal
-        isOpen={showCreateModal}
-        onClose={() => {
-          setShowCreateModal(false);
-          setSelectedSlot(null);
-        }}
-        onSubmit={handleCreateSchedule}
-        isLoading={false}
-        subjects={subjects.filter((s) => s.isActive)}
-        groups={groups.filter((g) => g.isActive)}
-        teachers={teachers}
-        defaultSlot={selectedSlot}
-      />
-    </div>
-  );
-};
-
-// Компонент сетки расписания
-interface ScheduleGridProps {
-  weekDays: WeekDay[];
-  weekDates: Date[];
-  timeSlots: readonly TimeSlot[];
-  getScheduleForSlot: (day: WeekDay, timeSlot: TimeSlot) => Schedule[];
-  getSubjectName: (id: string) => string;
-  getGroupName: (id: string) => string;
-  getTeacherName: (id: string) => string;
-  onSlotClick: (day: WeekDay, timeSlot: TimeSlot) => void;
-  onScheduleEdit: (schedule: Schedule) => void;
-  onScheduleDelete: (scheduleId: string) => void;
-}
-
-const ScheduleGrid: React.FC<ScheduleGridProps> = ({
-  weekDays,
-  weekDates,
-  timeSlots,
-  getScheduleForSlot,
-  getSubjectName,
-  getGroupName,
-  getTeacherName,
-  onSlotClick,
-  onScheduleEdit,
-  onScheduleDelete,
-}) => {
-  return (
-    <Card padding="none">
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase w-24">
-                Время
-              </th>
-              {weekDays.map((day, index) => (
-                <th
-                  key={day}
-                  className="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase"
-                >
-                  <div>
-                    <div>{getWeekDayLabel(day)}</div>
-                    <div className="text-slate-400 font-normal">
-                      {weekDates[index]?.toLocaleDateString("ru-RU", {
-                        day: "numeric",
-                        month: "short",
-                      })}
-                    </div>
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-slate-200">
-            {timeSlots.map((timeSlot) => (
-              <tr key={timeSlot.start}>
-                <td className="px-4 py-6 text-sm font-medium text-slate-900 bg-slate-50">
-                  <div>
-                    <div>{timeSlot.start}</div>
-                    <div className="text-xs text-slate-500">{timeSlot.end}</div>
-                  </div>
-                </td>
-                {weekDays.map((day) => {
-                  const schedules = getScheduleForSlot(day, timeSlot);
-                  return (
-                    <td
-                      key={`${day}-${timeSlot.start}`}
-                      className="px-2 py-2 text-sm relative"
-                      style={{ minHeight: "120px" }}
-                    >
-                      <div
-                        className="min-h-[100px] w-full border-2 border-dashed border-slate-200 rounded-lg hover:border-blue-300 cursor-pointer transition-colors flex flex-col"
-                        onClick={() =>
-                          schedules.length === 0 && onSlotClick(day, timeSlot)
-                        }
-                      >
-                        {schedules.length === 0 ? (
-                          <div className="flex-1 flex items-center justify-center text-slate-400 hover:text-blue-500">
-                            <Plus className="w-5 h-5" />
-                          </div>
-                        ) : (
-                          <div className="space-y-1 p-1">
-                            {schedules.map((schedule) => (
-                              <ScheduleCard
-                                key={schedule.$id}
-                                schedule={schedule}
-                                subjectName={getSubjectName(schedule.subjectId)}
-                                groupName={getGroupName(schedule.groupId)}
-                                teacherName={getTeacherName(schedule.teacherId)}
-                                onEdit={() => onScheduleEdit(schedule)}
-                                onDelete={() => onScheduleDelete(schedule.$id)}
-                              />
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Card>
-  );
-};
-
-// Компонент списка расписания
-interface ScheduleListProps {
-  scheduleData: Schedule[];
-  getSubjectName: (id: string) => string;
-  getGroupName: (id: string) => string;
-  getTeacherName: (id: string) => string;
-  onScheduleEdit: (schedule: Schedule) => void;
-  onScheduleDelete: (scheduleId: string) => void;
-}
-
-const ScheduleList: React.FC<ScheduleListProps> = ({
-  scheduleData,
-  getSubjectName,
-  getGroupName,
-  getTeacherName,
-  onScheduleEdit,
-  onScheduleDelete,
-}) => {
-  const groupedByDay = scheduleData.reduce((acc, schedule) => {
-    const day = schedule.dayOfWeek;
-    if (!acc[day]) acc[day] = [];
-    acc[day].push(schedule);
+  // Группировка по дням недели
+  const schedulesByDay = Object.values(WeekDay).reduce((acc, day) => {
+    acc[day] = filteredSchedules
+      .filter((s) => s.dayOfWeek === day)
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
     return acc;
   }, {} as Record<WeekDay, Schedule[]>);
 
+  const handleEdit = (schedule: Schedule) => {
+    setSelectedSchedule(schedule);
+    setShowEditModal(true);
+  };
+
+  const handleDelete = async (schedule: Schedule) => {
+    if (window.confirm(`Удалить расписание ${schedule.classroom}?`)) {
+      try {
+        await deleteMutation.mutateAsync(schedule.$id);
+        toast.success("Расписание удалено");
+      } catch (error: any) {
+        toast.error(error.message || "Ошибка при удалении");
+      }
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-2 text-slate-600">Загрузка расписания...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {Object.values(WeekDay).map((day) => {
-        const daySchedules = groupedByDay[day] || [];
-
-        return (
-          <Card key={day} padding="md">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">
-              {getWeekDayLabel(day)} ({daySchedules.length} занятий)
-            </h3>
-
-            {daySchedules.length === 0 ? (
-              <p className="text-slate-500 italic">Занятий нет</p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {daySchedules
-                  .sort((a, b) => a.startTime.localeCompare(b.startTime))
-                  .map((schedule) => (
-                    <ScheduleCard
-                      key={schedule.$id}
-                      schedule={schedule}
-                      subjectName={getSubjectName(schedule.subjectId)}
-                      groupName={getGroupName(schedule.groupId)}
-                      teacherName={getTeacherName(schedule.teacherId)}
-                      onEdit={() => onScheduleEdit(schedule)}
-                      onDelete={() => onScheduleDelete(schedule.$id)}
-                      expanded
-                    />
-                  ))}
-              </div>
-            )}
-          </Card>
-        );
-      })}
-    </div>
-  );
-};
-
-// Компонент карточки занятия
-interface ScheduleCardProps {
-  schedule: Schedule;
-  subjectName: string;
-  groupName: string;
-  teacherName: string;
-  onEdit: () => void;
-  onDelete: () => void;
-  expanded?: boolean;
-}
-
-const ScheduleCard: React.FC<ScheduleCardProps> = ({
-  schedule,
-  subjectName,
-  groupName,
-  teacherName,
-  onEdit,
-  onDelete,
-  expanded = false,
-}) => {
-  const [showActions, setShowActions] = useState(false);
-  const [showContextMenu, setShowContextMenu] = useState(false);
-
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setShowContextMenu(true);
-  };
-
-  const handleEdit = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onEdit();
-    setShowContextMenu(false);
-  };
-
-  const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (confirm(`Удалить занятие "${subjectName}" для группы ${groupName}?`)) {
-      onDelete();
-    }
-    setShowContextMenu(false);
-  };
-
-  return (
-    <div
-      className={`bg-blue-50 border border-blue-200 rounded-lg p-2 ${
-        expanded ? "p-3" : ""
-      } hover:shadow-sm transition-all relative group cursor-pointer select-none`}
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
-      onContextMenu={handleContextMenu}
-      onClick={() => setShowContextMenu(!showContextMenu)}
-    >
-      <div className="space-y-1">
-        <div className="font-medium text-blue-900 text-xs leading-tight pr-6">
-          {subjectName}
+      {/* Заголовок и статистика */}
+      <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">
+              Управление расписанием
+            </h2>
+            <p className="text-slate-600 mt-1">
+              Создание и редактирование расписания занятий
+            </p>
+          </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Добавить занятие</span>
+          </button>
         </div>
 
-        <div className="flex items-center text-xs text-blue-700">
-          <Clock className="w-3 h-3 mr-1" />
-          {schedule.startTime}-{schedule.endTime}
-        </div>
-
-        <div className="flex items-center text-xs text-blue-600">
-          <Users className="w-3 h-3 mr-1" />
-          {groupName}
-        </div>
-
-        {expanded && (
-          <>
-            <div className="flex items-center text-xs text-blue-600">
-              <BookOpen className="w-3 h-3 mr-1" />
-              {teacherName}
-            </div>
-
-            <div className="flex items-center text-xs text-blue-600">
-              <MapPin className="w-3 h-3 mr-1" />
-              {schedule.classroom}
-            </div>
-
-            {schedule.weekType !== "all" && (
-              <Badge variant="outline" className="text-xs">
-                {schedule.weekType === "odd"
-                  ? "Нечетная неделя"
-                  : "Четная неделя"}
-              </Badge>
-            )}
-
-            {/* Расширенный режим - показываем кнопки всегда */}
-            <div className="flex justify-end space-x-1 mt-2 pt-2 border-t border-blue-200">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleEdit}
-                className="text-xs px-2 py-1 h-6"
-              >
-                <Edit className="w-3 h-3 mr-1" />
-                Изменить
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleDelete}
-                className="text-xs px-2 py-1 h-6 text-red-600 border-red-200 hover:bg-red-50"
-              >
-                <Trash2 className="w-3 h-3 mr-1" />
-                Удалить
-              </Button>
-            </div>
-          </>
-        )}
-
-        {!expanded && (
-          <div className="text-xs text-blue-600 truncate">
-            {schedule.classroom}
+        {/* Статистика */}
+        {stats && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <StatCard
+              title="Всего занятий"
+              value={stats.total}
+              icon={Calendar}
+              color="bg-blue-500"
+            />
+            <StatCard
+              title="Активных"
+              value={stats.active}
+              icon={CheckCircle}
+              color="bg-emerald-500"
+            />
+            <StatCard
+              title="Неактивных"
+              value={stats.inactive}
+              icon={XCircle}
+              color="bg-red-500"
+            />
+            <StatCard
+              title="Среднее в день"
+              value={stats.avgClassesPerDay}
+              icon={Clock}
+              color="bg-purple-500"
+            />
           </div>
         )}
+
+        {/* Фильтры */}
+        <div className="flex flex-wrap gap-4">
+          <div className="flex-1 min-w-48">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Поиск по аудитории..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          <select
+            value={selectedDay}
+            onChange={(e) => setSelectedDay(e.target.value as WeekDay | "all")}
+            className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="all">Все дни</option>
+            {Object.values(WeekDay).map((day) => (
+              <option key={day} value={day}>
+                {WeekDayLabels[day]}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={selectedGroup}
+            onChange={(e) => setSelectedGroup(e.target.value)}
+            className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="all">Все группы</option>
+            {groups.map((group) => (
+              <option key={group.$id} value={group.$id}>
+                {group.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      {/* Кнопки при наведении - только в режиме сетки */}
-      {!expanded && showActions && (
-        <div className="absolute top-1 right-1 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded border shadow-sm">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={handleEdit}
-            className="p-1 h-6 w-6 hover:bg-blue-50"
-            title="Редактировать"
-          >
-            <Edit className="w-3 h-3" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={handleDelete}
-            className="p-1 h-6 w-6 text-red-600 hover:bg-red-50"
-            title="Удалить"
-          >
-            <Trash2 className="w-3 h-3" />
-          </Button>
-        </div>
+      {/* Расписание по дням */}
+      <div className="space-y-6">
+        {Object.values(WeekDay).map((day) => (
+          <DayScheduleCard
+            key={day}
+            day={day}
+            schedules={schedulesByDay[day]}
+            groups={groups}
+            subjects={subjects}
+            teachers={teachers}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
+        ))}
+      </div>
+
+      {/* Модалы */}
+      {showCreateModal && (
+        <ScheduleModal
+          title="Создать занятие"
+          groups={groups}
+          subjects={subjects}
+          teachers={teachers}
+          onClose={() => setShowCreateModal(false)}
+          onSubmit={async (data) => {
+            try {
+              await createMutation.mutateAsync(data);
+              toast.success("Занятие добавлено в расписание");
+              setShowCreateModal(false);
+            } catch (error: any) {
+              toast.error(error.message || "Ошибка при создании");
+            }
+          }}
+          isLoading={createMutation.isPending}
+        />
       )}
 
-      {/* Контекстное меню */}
-      {!expanded && showContextMenu && (
-        <div className="absolute top-8 right-0 bg-white border border-slate-200 rounded-lg shadow-lg z-50 min-w-[120px]">
-          <div className="py-1">
-            <button
-              onClick={handleEdit}
-              className="w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50 flex items-center"
-            >
-              <Edit className="w-3 h-3 mr-2" />
-              Редактировать
-            </button>
-            <button
-              onClick={handleDelete}
-              className="w-full px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 flex items-center"
-            >
-              <Trash2 className="w-3 h-3 mr-2" />
-              Удалить
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Индикатор действий */}
-      {!expanded && (
-        <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-          <div className="w-1 h-1 bg-blue-400 rounded-full"></div>
-        </div>
-      )}
-
-      {/* Закрытие контекстного меню при клике вне */}
-      {showContextMenu && (
-        <div
-          className="fixed inset-0 z-40"
-          onClick={() => setShowContextMenu(false)}
+      {showEditModal && selectedSchedule && (
+        <ScheduleModal
+          title="Редактировать занятие"
+          schedule={selectedSchedule}
+          groups={groups}
+          subjects={subjects}
+          teachers={teachers}
+          onClose={() => {
+            setShowEditModal(false);
+            setSelectedSchedule(null);
+          }}
+          onSubmit={async (data) => {
+            try {
+              await updateMutation.mutateAsync({
+                id: selectedSchedule.$id,
+                updates: data,
+              });
+              toast.success("Расписание обновлено");
+              setShowEditModal(false);
+              setSelectedSchedule(null);
+            } catch (error: any) {
+              toast.error(error.message || "Ошибка при обновлении");
+            }
+          }}
+          isLoading={updateMutation.isPending}
         />
       )}
     </div>
   );
-};
+}
 
-// Модальное окно создания занятия
-interface CreateScheduleModalProps {
-  isOpen: boolean;
+// Компонент статистики
+interface StatCardProps {
+  title: string;
+  value: number;
+  icon: React.ElementType;
+  color: string;
+}
+
+function StatCard({ title, value, icon: Icon, color }: StatCardProps) {
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-slate-600">{title}</p>
+          <p className="text-2xl font-bold text-slate-900 mt-1">{value}</p>
+        </div>
+        <div className={`p-3 rounded-lg ${color}`}>
+          <Icon className="w-5 h-5 text-white" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Компонент карточки дня
+interface DayScheduleCardProps {
+  day: WeekDay;
+  schedules: Schedule[];
+  groups: any[];
+  subjects: any[];
+  teachers: any[];
+  onEdit: (schedule: Schedule) => void;
+  onDelete: (schedule: Schedule) => void;
+}
+
+function DayScheduleCard({
+  day,
+  schedules,
+  groups,
+  subjects,
+  teachers,
+  onEdit,
+  onDelete,
+}: DayScheduleCardProps) {
+  if (schedules.length === 0) return null;
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+      <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center">
+        <Calendar className="w-5 h-5 mr-2 text-blue-600" />
+        {WeekDayLabels[day]} ({schedules.length} занятий)
+      </h3>
+
+      <div className="grid gap-4">
+        {schedules.map((schedule) => {
+          const group = groups.find((g) => g.$id === schedule.groupId);
+          const subject = subjects.find((s) => s.$id === schedule.subjectId);
+          const teacher = teachers.find((t) => t.$id === schedule.teacherId);
+
+          return (
+            <div
+              key={schedule.$id}
+              className="border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center space-x-4 mb-2">
+                    <div className="flex items-center text-sm font-medium text-slate-900">
+                      <Clock className="w-4 h-4 mr-1 text-blue-600" />
+                      {schedule.startTime} - {schedule.endTime}
+                    </div>
+                    <div className="flex items-center text-sm text-slate-600">
+                      <MapPin className="w-4 h-4 mr-1 text-orange-600" />
+                      {schedule.classroom}
+                    </div>
+                    {schedule.weekType && schedule.weekType !== "all" && (
+                      <span className="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded">
+                        {schedule.weekType === "odd" ? "Нечетная" : "Четная"}{" "}
+                        неделя
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center space-x-4 text-sm text-slate-600">
+                    <div className="flex items-center">
+                      <BookOpen className="w-4 h-4 mr-1" />
+                      {subject?.name || "Предмет не найден"}
+                    </div>
+                    <div className="flex items-center">
+                      <Users className="w-4 h-4 mr-1" />
+                      {group?.name || "Группа не найдена"}
+                    </div>
+                    <div className="flex items-center">
+                      <User className="w-4 h-4 mr-1" />
+                      {teacher?.name || "Преподаватель не найден"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <span
+                    className={`px-2 py-1 text-xs rounded ${
+                      schedule.isActive
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {schedule.isActive ? "Активно" : "Неактивно"}
+                  </span>
+
+                  <button
+                    onClick={() => onEdit(schedule)}
+                    className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                    title="Редактировать"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    onClick={() => onDelete(schedule)}
+                    className="p-1 text-red-600 hover:bg-red-50 rounded"
+                    title="Удалить"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Компонент модального окна
+interface ScheduleModalProps {
+  title: string;
+  schedule?: Schedule;
+  groups: any[];
+  subjects: any[];
+  teachers: any[];
   onClose: () => void;
   onSubmit: (data: CreateScheduleDto) => Promise<void>;
   isLoading: boolean;
-  subjects: any[];
-  groups: any[];
-  teachers: any[];
-  defaultSlot?: { day: WeekDay; timeSlot: TimeSlot } | null;
 }
 
-const CreateScheduleModal: React.FC<CreateScheduleModalProps> = ({
-  isOpen,
+function ScheduleModal({
+  title,
+  schedule,
+  groups,
+  subjects,
+  teachers,
   onClose,
   onSubmit,
   isLoading,
-  subjects,
-  groups,
-  teachers,
-  defaultSlot,
-}) => {
+}: ScheduleModalProps) {
   const [formData, setFormData] = useState<CreateScheduleDto>({
-    subjectId: "",
-    groupId: "",
-    teacherId: "",
-    dayOfWeek: WeekDay.MONDAY,
-    startTime: "09:00",
-    endTime: "10:30",
-    classroom: "",
-    weekType: "all",
+    subjectId: schedule?.subjectId || "",
+    groupId: schedule?.groupId || "",
+    teacherId: schedule?.teacherId || "",
+    dayOfWeek: schedule?.dayOfWeek || WeekDay.MONDAY,
+    startTime: schedule?.startTime || "",
+    endTime: schedule?.endTime || "",
+    classroom: schedule?.classroom || "",
+    weekType: schedule?.weekType || "all",
   });
 
-  React.useEffect(() => {
-    if (defaultSlot) {
-      setFormData((prev) => ({
-        ...prev,
-        dayOfWeek: defaultSlot.day,
-        startTime: defaultSlot.timeSlot.start,
-        endTime: defaultSlot.timeSlot.end,
-      }));
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.subjectId) newErrors.subjectId = "Выберите предмет";
+    if (!formData.groupId) newErrors.groupId = "Выберите группу";
+    if (!formData.teacherId) newErrors.teacherId = "Выберите преподавателя";
+    if (!formData.startTime) newErrors.startTime = "Укажите время начала";
+    if (!formData.endTime) newErrors.endTime = "Укажите время окончания";
+    if (!formData.classroom) newErrors.classroom = "Укажите аудиторию";
+
+    if (formData.startTime && formData.endTime) {
+      const start = formData.startTime.split(":").map(Number);
+      const end = formData.endTime.split(":").map(Number);
+      const startMinutes = start[0] * 60 + start[1];
+      const endMinutes = end[0] * 60 + end[1];
+
+      if (startMinutes >= endMinutes) {
+        newErrors.endTime = "Время окончания должно быть больше времени начала";
+      }
     }
-  }, [defaultSlot]);
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Валидация формы
-    if (!formData.subjectId) {
-      toast.error("Выберите предмет");
-      return;
-    }
-    if (!formData.groupId) {
-      toast.error("Выберите группу");
-      return;
-    }
-    if (!formData.teacherId) {
-      toast.error("Выберите преподавателя");
-      return;
-    }
-    if (!formData.classroom.trim()) {
-      toast.error("Укажите аудиторию");
-      return;
-    }
+    if (!validateForm()) return;
 
     await onSubmit(formData);
-    setFormData({
-      subjectId: "",
-      groupId: "",
-      teacherId: "",
-      dayOfWeek: WeekDay.MONDAY,
-      startTime: "09:00",
-      endTime: "10:30",
-      classroom: "",
-      weekType: "all",
-    });
   };
 
+  // Фильтровать предметы для выбранного преподавателя
+  const filteredSubjects = formData.teacherId
+    ? subjects.filter((s) => s.teacherId === formData.teacherId)
+    : subjects;
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Добавить занятие" size="lg">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Select
-            label="Предмет"
-            value={formData.subjectId}
-            onChange={(value) =>
-              setFormData({ ...formData, subjectId: value as string })
-            }
-            options={subjects.map((subject) => ({
-              value: subject.$id,
-              label: `${subject.name} (${subject.code})`,
-            }))}
-            required
-            placeholder="Выберите предмет"
-          />
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <h3 className="text-lg font-semibold text-slate-900 mb-4">{title}</h3>
 
-          <Select
-            label="Группа"
-            value={formData.groupId}
-            onChange={(value) =>
-              setFormData({ ...formData, groupId: value as string })
-            }
-            options={groups.map((group) => ({
-              value: group.$id,
-              label: `${group.name} (${group.code})`,
-            }))}
-            required
-            placeholder="Выберите группу"
-          />
-        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Преподаватель */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Преподаватель
+            </label>
+            <select
+              value={formData.teacherId}
+              onChange={(e) => {
+                setFormData((prev) => ({
+                  ...prev,
+                  teacherId: e.target.value,
+                  subjectId: "", // Сбрасываем предмет при смене преподавателя
+                }));
+                setErrors((prev) => ({ ...prev, teacherId: "" }));
+              }}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                errors.teacherId ? "border-red-500" : "border-slate-300"
+              }`}
+            >
+              <option value="">Выберите преподавателя</option>
+              {teachers.map((teacher) => (
+                <option key={teacher.$id} value={teacher.$id}>
+                  {teacher.name}
+                </option>
+              ))}
+            </select>
+            {errors.teacherId && (
+              <p className="text-red-500 text-sm mt-1">{errors.teacherId}</p>
+            )}
+          </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Select
-            label="Преподаватель"
-            value={formData.teacherId}
-            onChange={(value) =>
-              setFormData({ ...formData, teacherId: value as string })
-            }
-            options={teachers.map((teacher) => ({
-              value: teacher.$id,
-              label: teacher.name,
-            }))}
-            required
-            placeholder="Выберите преподавателя"
-          />
+          {/* Предмет */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Предмет
+            </label>
+            <select
+              value={formData.subjectId}
+              onChange={(e) => {
+                setFormData((prev) => ({ ...prev, subjectId: e.target.value }));
+                setErrors((prev) => ({ ...prev, subjectId: "" }));
+              }}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                errors.subjectId ? "border-red-500" : "border-slate-300"
+              }`}
+              disabled={!formData.teacherId}
+            >
+              <option value="">Выберите предмет</option>
+              {filteredSubjects.map((subject) => (
+                <option key={subject.$id} value={subject.$id}>
+                  {subject.name} ({subject.code})
+                </option>
+              ))}
+            </select>
+            {errors.subjectId && (
+              <p className="text-red-500 text-sm mt-1">{errors.subjectId}</p>
+            )}
+          </div>
 
-          <Select
-            label="День недели"
-            value={formData.dayOfWeek}
-            onChange={(value) =>
-              setFormData({ ...formData, dayOfWeek: value as WeekDay })
-            }
-            options={Object.values(WeekDay).map((day) => ({
-              value: day,
-              label: getWeekDayLabel(day),
-            }))}
-          />
-        </div>
+          {/* Группа */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Группа
+            </label>
+            <select
+              value={formData.groupId}
+              onChange={(e) => {
+                setFormData((prev) => ({ ...prev, groupId: e.target.value }));
+                setErrors((prev) => ({ ...prev, groupId: "" }));
+              }}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                errors.groupId ? "border-red-500" : "border-slate-300"
+              }`}
+            >
+              <option value="">Выберите группу</option>
+              {groups.map((group) => (
+                <option key={group.$id} value={group.$id}>
+                  {group.name} - {group.course} курс
+                </option>
+              ))}
+            </select>
+            {errors.groupId && (
+              <p className="text-red-500 text-sm mt-1">{errors.groupId}</p>
+            )}
+          </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Select
-            label="Время начала"
-            value={formData.startTime}
-            onChange={(value) =>
-              setFormData({ ...formData, startTime: value as string })
-            }
-            options={TIME_SLOTS.map((slot) => ({
-              value: slot.start,
-              label: slot.start,
-            }))}
-          />
+          {/* День недели */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              День недели
+            </label>
+            <select
+              value={formData.dayOfWeek}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  dayOfWeek: e.target.value as WeekDay,
+                }))
+              }
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {Object.values(WeekDay).map((day) => (
+                <option key={day} value={day}>
+                  {WeekDayLabels[day]}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          <Select
-            label="Время окончания"
-            value={formData.endTime}
-            onChange={(value) =>
-              setFormData({ ...formData, endTime: value as string })
-            }
-            options={TIME_SLOTS.map((slot) => ({
-              value: slot.end,
-              label: slot.end,
-            }))}
-          />
+          {/* Время */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Время начала
+              </label>
+              <select
+                value={formData.startTime}
+                onChange={(e) => {
+                  setFormData((prev) => ({
+                    ...prev,
+                    startTime: e.target.value,
+                  }));
+                  setErrors((prev) => ({ ...prev, startTime: "" }));
+                }}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  errors.startTime ? "border-red-500" : "border-slate-300"
+                }`}
+              >
+                <option value="">Выберите время</option>
+                {TIME_SLOTS.map((slot) => (
+                  <option key={slot.start} value={slot.start}>
+                    {slot.start}
+                  </option>
+                ))}
+              </select>
+              {errors.startTime && (
+                <p className="text-red-500 text-sm mt-1">{errors.startTime}</p>
+              )}
+            </div>
 
-          <Input
-            label="Аудитория"
-            value={formData.classroom}
-            onChange={(e) =>
-              setFormData({ ...formData, classroom: e.target.value })
-            }
-            placeholder="Ауд. 205"
-          />
-        </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Время окончания
+              </label>
+              <select
+                value={formData.endTime}
+                onChange={(e) => {
+                  setFormData((prev) => ({ ...prev, endTime: e.target.value }));
+                  setErrors((prev) => ({ ...prev, endTime: "" }));
+                }}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  errors.endTime ? "border-red-500" : "border-slate-300"
+                }`}
+              >
+                <option value="">Выберите время</option>
+                {TIME_SLOTS.map((slot) => (
+                  <option key={slot.end} value={slot.end}>
+                    {slot.end}
+                  </option>
+                ))}
+              </select>
+              {errors.endTime && (
+                <p className="text-red-500 text-sm mt-1">{errors.endTime}</p>
+              )}
+            </div>
+          </div>
 
-        <Select
-          label="Тип недели"
-          value={formData.weekType || "all"}
-          onChange={(value) =>
-            setFormData({
-              ...formData,
-              weekType: value as "odd" | "even" | "all",
-            })
-          }
-          options={WEEK_TYPES}
-        />
+          {/* Аудитория */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Аудитория
+            </label>
+            <input
+              type="text"
+              value={formData.classroom}
+              onChange={(e) => {
+                setFormData((prev) => ({ ...prev, classroom: e.target.value }));
+                setErrors((prev) => ({ ...prev, classroom: "" }));
+              }}
+              placeholder="Номер аудитории"
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                errors.classroom ? "border-red-500" : "border-slate-300"
+              }`}
+            />
+            {errors.classroom && (
+              <p className="text-red-500 text-sm mt-1">{errors.classroom}</p>
+            )}
+          </div>
 
-        <div className="flex justify-end space-x-3 pt-4">
-          <Button variant="outline" onClick={onClose} type="button">
-            Отмена
-          </Button>
-          <Button
-            variant="primary"
-            type="submit"
-            loading={isLoading}
-            icon={<Plus className="w-4 h-4" />}
-          >
-            Добавить
-          </Button>
-        </div>
-      </form>
-    </Modal>
+          {/* Тип недели */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Периодичность
+            </label>
+            <select
+              value={formData.weekType}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  weekType: e.target.value as any,
+                }))
+              }
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {WEEK_TYPES.map((type) => (
+                <option key={type.value} value={type.value}>
+                  {type.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Кнопки */}
+          <div className="flex space-x-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? "Сохранение..." : schedule ? "Обновить" : "Создать"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
-};
+}

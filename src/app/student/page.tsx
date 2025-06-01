@@ -1,14 +1,23 @@
-// src/app/student/page.tsx (Обновленная версия)
+// src/app/student/page.tsx (Полная реализация)
 
 "use client";
 
 import React, { useState } from "react";
 import { useAuthStore } from "@/store/authStore";
-import { useStudentAttendanceStats } from "@/services/attendanceService";
+import {
+  useStudentAttendanceStats,
+  useStudentAttendance,
+} from "@/services/attendanceService";
+import { useSubjectsForGroup } from "@/services/subjectService";
+import { useGroupById } from "@/services/groupeServise";
+import { useUsersByRole } from "@/services/authService";
 import {
   AttendanceStatus,
   getAttendanceStatusLabel,
   getAttendanceStatusColor,
+  UserRole,
+  WeekDay,
+  getWeekDayLabel,
 } from "@/types";
 import {
   Calendar,
@@ -20,81 +29,117 @@ import {
   AlertCircle,
   TrendingUp,
   TrendingDown,
-  LogOut,
   GraduationCap,
   MapPin,
   User,
   Award,
+  Phone,
+  Mail,
+  Edit,
+  Download,
+  Bell,
+  Settings,
 } from "lucide-react";
-import { toast } from "react-toastify"; // Обновленный импорт
+import { toast } from "react-toastify";
 import { LogoutButton } from "@/components/LogoutButton";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { formatDate, getWeekDates, isToday } from "@/utils/dates";
+import { formatPercentage } from "@/utils/format";
 
 export default function StudentDashboard() {
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<
     "overview" | "schedule" | "attendance" | "profile"
   >("overview");
 
-  // Получаем статистику посещаемости студента
+  // Получаем данные студента
+  const { data: group } = useGroupById(user?.groupId || "");
+  const { data: subjects = [] } = useSubjectsForGroup(user?.groupId || "");
+  const { data: teachers = [] } = useUsersByRole(UserRole.TEACHER);
   const { data: attendanceStats } = useStudentAttendanceStats(user?.$id || "");
+  const { data: attendanceHistory = [] } = useStudentAttendance(
+    user?.$id || ""
+  );
 
+  // Получаем данные для текущей недели
   const today = new Date();
-  const currentWeekDays = Array.from({ length: 7 }, (_, i) => {
-    const date = new Date(today);
-    date.setDate(today.getDate() - today.getDay() + i);
-    return date;
-  });
+  const weekDates = getWeekDates(today);
 
-  // Мок данные для демонстрации
-  const mockSchedule = [
-    {
-      time: "09:00 - 10:30",
-      subject: "Математический анализ",
-      teacher: "Иванова А.С.",
-      classroom: "Аудитория 205",
-      type: "Лекция",
-    },
-    {
-      time: "10:45 - 12:15",
-      subject: "Программирование",
-      teacher: "Петров П.П.",
-      classroom: "Аудитория 301",
-      type: "Практика",
-    },
-    {
-      time: "13:00 - 14:30",
-      subject: "Физика",
-      teacher: "Сидорова С.С.",
-      classroom: "Аудитория 105",
-      type: "Лабораторная",
-    },
-  ];
+  // Мок данные расписания на неделю (в реальном приложении будут из API)
+  const weekSchedule = {
+    [WeekDay.MONDAY]: [
+      {
+        time: "09:00-10:30",
+        subject: "Математический анализ",
+        teacher: "Иванова А.С.",
+        classroom: "Ауд. 205",
+        type: "Лекция",
+      },
+      {
+        time: "10:45-12:15",
+        subject: "Программирование",
+        teacher: "Петров П.П.",
+        classroom: "Ауд. 301",
+        type: "Практика",
+      },
+    ],
+    [WeekDay.TUESDAY]: [
+      {
+        time: "11:30-13:00",
+        subject: "Физика",
+        teacher: "Сидорова С.С.",
+        classroom: "Ауд. 105",
+        type: "Лабораторная",
+      },
+    ],
+    [WeekDay.WEDNESDAY]: [
+      {
+        time: "09:00-10:30",
+        subject: "Математический анализ",
+        teacher: "Иванова А.С.",
+        classroom: "Ауд. 205",
+        type: "Лекция",
+      },
+    ],
+    [WeekDay.THURSDAY]: [
+      {
+        time: "13:45-15:15",
+        subject: "Программирование",
+        teacher: "Петров П.П.",
+        classroom: "Ауд. 301",
+        type: "Практика",
+      },
+    ],
+    [WeekDay.FRIDAY]: [
+      {
+        time: "10:45-12:15",
+        subject: "Физика",
+        teacher: "Сидорова С.С.",
+        classroom: "Ауд. 105",
+        type: "Лекция",
+      },
+    ],
+    [WeekDay.SATURDAY]: [],
+    [WeekDay.SUNDAY]: [],
+  };
 
-  const mockAttendanceHistory = [
-    {
-      date: "2024-01-15",
-      subject: "Математический анализ",
-      status: AttendanceStatus.PRESENT,
-    },
-    {
-      date: "2024-01-15",
-      subject: "Программирование",
-      status: AttendanceStatus.PRESENT,
-    },
-    { date: "2024-01-14", subject: "Физика", status: AttendanceStatus.ABSENT },
-    {
-      date: "2024-01-14",
-      subject: "Математический анализ",
-      status: AttendanceStatus.LATE,
-    },
-    {
-      date: "2024-01-13",
-      subject: "Программирование",
-      status: AttendanceStatus.PRESENT,
-    },
-  ];
+  const todaysSchedule = weekSchedule[getWeekDayFromDate(today)] || [];
 
-  const attendanceRate = 85; // Процент посещаемости
+  // Функция для получения дня недели из даты
+  const getWeekDayFromDate = (date: Date): WeekDay => {
+    const days = [
+      WeekDay.SUNDAY,
+      WeekDay.MONDAY,
+      WeekDay.TUESDAY,
+      WeekDay.WEDNESDAY,
+      WeekDay.THURSDAY,
+      WeekDay.FRIDAY,
+      WeekDay.SATURDAY,
+    ];
+    return days[date.getDay()];
+  };
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -125,7 +170,7 @@ export default function StudentDashboard() {
                   {user?.name}
                 </p>
                 <p className="text-xs text-slate-500">
-                  Студент • Группа ИТ-301
+                  Студент • {group?.code || "Группа не назначена"}
                 </p>
               </div>
               <LogoutButton />
@@ -164,142 +209,740 @@ export default function StudentDashboard() {
       {/* Контент */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === "overview" && (
-          <div className="space-y-8">
-            {/* Приветствие */}
-            <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg p-6 text-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-2xl font-bold mb-2">
-                    Добро пожаловать, {user?.name?.split(" ")[0]}!
-                  </h1>
-                  <p className="text-purple-100">
-                    Сегодня у вас {mockSchedule.length} занятия. Ваша
-                    посещаемость: {attendanceRate}%
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="text-3xl font-bold">{attendanceRate}%</div>
-                  <div className="text-sm text-purple-100">Посещаемость</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Статистика */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <StatCard
-                title="Посещено занятий"
-                value="42"
-                icon={CheckCircle}
-                color="bg-emerald-500"
-                trend="+3 на этой неделе"
-                trendUp={true}
-              />
-              <StatCard
-                title="Пропущено"
-                value="8"
-                icon={XCircle}
-                color="bg-red-500"
-                trend="-1 с прошлой недели"
-                trendUp={false}
-              />
-              <StatCard
-                title="Опозданий"
-                value="3"
-                icon={AlertCircle}
-                color="bg-orange-500"
-                trend="Без изменений"
-              />
-              <StatCard
-                title="Средний балл"
-                value="4.2"
-                icon={Award}
-                color="bg-blue-500"
-                trend="+0.2 за месяц"
-                trendUp={true}
-              />
-            </div>
-
-            {/* Расписание на сегодня */}
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200">
-              <div className="px-6 py-4 border-b border-slate-200">
-                <h3 className="text-lg font-medium text-slate-900">
-                  Расписание на сегодня (
-                  {today.toLocaleDateString("ru-RU", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                  })}
-                  )
-                </h3>
-              </div>
-              <div className="p-6">
-                {mockSchedule.length > 0 ? (
-                  <div className="space-y-4">
-                    {mockSchedule.map((item, index) => (
-                      <ScheduleItem key={index} item={item} />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <Calendar className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-                    <h4 className="text-lg font-medium text-slate-900 mb-2">
-                      Свободный день
-                    </h4>
-                    <p className="text-slate-600">
-                      На сегодня у вас нет занятий
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Последние отметки посещаемости */}
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200">
-              <div className="px-6 py-4 border-b border-slate-200">
-                <h3 className="text-lg font-medium text-slate-900">
-                  Недавняя посещаемость
-                </h3>
-              </div>
-              <div className="p-6">
-                <div className="space-y-3">
-                  {mockAttendanceHistory.slice(0, 5).map((record, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between py-2"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div className="text-sm text-slate-500">
-                          {new Date(record.date).toLocaleDateString("ru-RU")}
-                        </div>
-                        <div className="text-sm font-medium text-slate-900">
-                          {record.subject}
-                        </div>
-                      </div>
-                      <span
-                        className={`text-xs px-2 py-1 rounded-full ${getAttendanceStatusColor(
-                          record.status
-                        )}`}
-                      >
-                        {getAttendanceStatusLabel(record.status)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
+          <OverviewTab
+            user={user}
+            group={group}
+            subjects={subjects}
+            attendanceStats={attendanceStats}
+            attendanceHistory={attendanceHistory}
+            todaysSchedule={todaysSchedule}
+            today={today}
+          />
         )}
 
         {activeTab === "schedule" && (
-          <ScheduleTab currentWeekDays={currentWeekDays} today={today} />
+          <ScheduleTab
+            weekSchedule={weekSchedule}
+            weekDates={weekDates}
+            today={today}
+          />
         )}
 
         {activeTab === "attendance" && (
-          <AttendanceTab attendanceHistory={mockAttendanceHistory} />
+          <AttendanceTab
+            attendanceHistory={attendanceHistory}
+            attendanceStats={attendanceStats}
+            subjects={subjects}
+          />
         )}
 
-        {activeTab === "profile" && <ProfileTab user={user} />}
+        {activeTab === "profile" && <ProfileTab user={user} group={group} />}
       </main>
+    </div>
+  );
+}
+
+// Компонент вкладки обзора
+function OverviewTab({
+  user,
+  group,
+  subjects,
+  attendanceStats,
+  attendanceHistory,
+  todaysSchedule,
+  today,
+}: {
+  user: any;
+  group: any;
+  subjects: any[];
+  attendanceStats: any;
+  attendanceHistory: any[];
+  todaysSchedule: any[];
+  today: Date;
+}) {
+  const attendanceRate = attendanceStats?.attendanceRate || 0;
+
+  return (
+    <div className="space-y-8">
+      {/* Приветствие */}
+      <Card padding="md">
+        <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg p-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold mb-2">
+                Добро пожаловать, {user?.name?.split(" ")[0]}!
+              </h1>
+              <p className="text-purple-100">
+                Сегодня у вас {todaysSchedule.length} занятий. Ваша
+                посещаемость: {formatPercentage(attendanceRate)}
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="text-3xl font-bold">
+                {Math.round(attendanceRate)}%
+              </div>
+              <div className="text-sm text-purple-100">Посещаемость</div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Статистика */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          title="Посещено занятий"
+          value={attendanceStats?.presentCount || 0}
+          icon={CheckCircle}
+          color="bg-emerald-500"
+          trend={`+${attendanceStats?.presentCount || 0} всего`}
+          trendUp={true}
+        />
+        <StatCard
+          title="Пропущено"
+          value={attendanceStats?.absentCount || 0}
+          icon={XCircle}
+          color="bg-red-500"
+          trend={`${attendanceStats?.absentCount || 0} всего`}
+          trendUp={false}
+        />
+        <StatCard
+          title="Опозданий"
+          value={attendanceStats?.lateCount || 0}
+          icon={AlertCircle}
+          color="bg-orange-500"
+          trend={`${attendanceStats?.lateCount || 0} всего`}
+        />
+        <StatCard
+          title="Изучаемых предметов"
+          value={subjects.length}
+          icon={BookOpen}
+          color="bg-blue-500"
+          trend={`В ${group?.course || 0} семестре`}
+          trendUp={true}
+        />
+      </div>
+
+      {/* Расписание на сегодня */}
+      <Card padding="md">
+        <div className="border-b border-slate-200 pb-4 mb-6">
+          <h3 className="text-lg font-medium text-slate-900">
+            Расписание на сегодня (
+            {today.toLocaleDateString("ru-RU", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+            })}
+            )
+          </h3>
+        </div>
+
+        {todaysSchedule.length > 0 ? (
+          <div className="space-y-4">
+            {todaysSchedule.map((item, index) => (
+              <ScheduleItem key={index} item={item} />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <Calendar className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+            <h4 className="text-lg font-medium text-slate-900 mb-2">
+              Свободный день
+            </h4>
+            <p className="text-slate-600">На сегодня у вас нет занятий</p>
+          </div>
+        )}
+      </Card>
+
+      {/* Последние отметки посещаемости */}
+      <Card padding="md">
+        <div className="border-b border-slate-200 pb-4 mb-6">
+          <h3 className="text-lg font-medium text-slate-900">
+            Недавняя посещаемость
+          </h3>
+        </div>
+
+        {attendanceHistory.length > 0 ? (
+          <div className="space-y-3">
+            {attendanceHistory.slice(0, 5).map((record, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between py-3 border-b border-slate-100 last:border-b-0"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="text-sm text-slate-500">
+                    {formatDate(record.$createdAt, "short")}
+                  </div>
+                  <div className="text-sm font-medium text-slate-900">
+                    Занятие #{record.classId.slice(-6)}
+                  </div>
+                </div>
+                <Badge
+                  variant={
+                    record.status === AttendanceStatus.PRESENT
+                      ? "success"
+                      : record.status === AttendanceStatus.ABSENT
+                      ? "danger"
+                      : record.status === AttendanceStatus.LATE
+                      ? "warning"
+                      : "info"
+                  }
+                >
+                  {getAttendanceStatusLabel(record.status)}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <CheckCircle className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+            <h4 className="text-lg font-medium text-slate-900 mb-2">
+              Нет данных о посещаемости
+            </h4>
+            <p className="text-slate-600">
+              Данные о посещаемости появятся после проведения занятий
+            </p>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// Компонент вкладки расписания
+function ScheduleTab({
+  weekSchedule,
+  weekDates,
+  today,
+}: {
+  weekSchedule: any;
+  weekDates: Date[];
+  today: Date;
+}) {
+  const [selectedWeek, setSelectedWeek] = useState(0);
+
+  const weekDays = Object.values(WeekDay);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-slate-900">Расписание</h2>
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => toast.info("Экспорт расписания в разработке")}
+            icon={<Download className="w-4 h-4" />}
+          >
+            Экспорт
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => toast.info("Уведомления в разработке")}
+            icon={<Bell className="w-4 h-4" />}
+          >
+            Уведомления
+          </Button>
+        </div>
+      </div>
+
+      {/* Календарь недели */}
+      <Card padding="none">
+        <div className="p-6 border-b border-slate-200">
+          <h3 className="text-lg font-medium text-slate-900">
+            Неделя{" "}
+            {weekDates[0].toLocaleDateString("ru-RU", {
+              day: "numeric",
+              month: "short",
+            })}{" "}
+            -{" "}
+            {weekDates[6].toLocaleDateString("ru-RU", {
+              day: "numeric",
+              month: "short",
+            })}
+          </h3>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-slate-50">
+              <tr>
+                {weekDays.map((day, index) => {
+                  const dayDate = weekDates[index];
+                  const isToday =
+                    dayDate?.toDateString() === today.toDateString();
+
+                  return (
+                    <th
+                      key={day}
+                      className={`px-4 py-3 text-center text-sm font-medium text-slate-700 ${
+                        isToday ? "bg-purple-50 text-purple-700" : ""
+                      }`}
+                    >
+                      <div>
+                        <div className="font-medium">
+                          {getWeekDayLabel(day)}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-1">
+                          {dayDate?.toLocaleDateString("ru-RU", {
+                            day: "numeric",
+                            month: "short",
+                          })}
+                        </div>
+                      </div>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                {weekDays.map((day) => {
+                  const daySchedule = weekSchedule[day] || [];
+
+                  return (
+                    <td
+                      key={day}
+                      className="px-2 py-4 align-top border-r border-slate-200 last:border-r-0"
+                    >
+                      <div className="space-y-2">
+                        {daySchedule.length > 0 ? (
+                          daySchedule.map((item: any, index: number) => (
+                            <ScheduleCard key={index} item={item} compact />
+                          ))
+                        ) : (
+                          <div className="text-center py-8 text-slate-400">
+                            <Calendar className="w-6 h-6 mx-auto mb-2" />
+                            <span className="text-xs">Нет занятий</span>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Подробное расписание на сегодня */}
+      <Card padding="md">
+        <div className="border-b border-slate-200 pb-4 mb-6">
+          <h3 className="text-lg font-medium text-slate-900">
+            Подробное расписание на сегодня
+          </h3>
+        </div>
+
+        {weekSchedule[getWeekDayFromDate(today)]?.length > 0 ? (
+          <div className="space-y-4">
+            {weekSchedule[getWeekDayFromDate(today)].map(
+              (item: any, index: number) => (
+                <ScheduleItem key={index} item={item} />
+              )
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <Calendar className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+            <h4 className="text-lg font-medium text-slate-900 mb-2">
+              Свободный день
+            </h4>
+            <p className="text-slate-600">На сегодня у вас нет занятий</p>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+
+  function getWeekDayFromDate(date: Date): WeekDay {
+    const days = [
+      WeekDay.SUNDAY,
+      WeekDay.MONDAY,
+      WeekDay.TUESDAY,
+      WeekDay.WEDNESDAY,
+      WeekDay.THURSDAY,
+      WeekDay.FRIDAY,
+      WeekDay.SATURDAY,
+    ];
+    return days[date.getDay()];
+  }
+}
+
+// Компонент вкладки посещаемости
+function AttendanceTab({
+  attendanceHistory,
+  attendanceStats,
+  subjects,
+}: {
+  attendanceHistory: any[];
+  attendanceStats: any;
+  subjects: any[];
+}) {
+  const [selectedPeriod, setSelectedPeriod] = useState("month");
+  const [selectedSubject, setSelectedSubject] = useState("all");
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-slate-900">Моя посещаемость</h2>
+        <div className="flex items-center space-x-2">
+          <select
+            value={selectedPeriod}
+            onChange={(e) => setSelectedPeriod(e.target.value)}
+            className="px-3 py-2 border border-slate-300 rounded-lg text-sm"
+          >
+            <option value="week">За неделю</option>
+            <option value="month">За месяц</option>
+            <option value="semester">За семестр</option>
+            <option value="year">За год</option>
+          </select>
+
+          <select
+            value={selectedSubject}
+            onChange={(e) => setSelectedSubject(e.target.value)}
+            className="px-3 py-2 border border-slate-300 rounded-lg text-sm"
+          >
+            <option value="all">Все предметы</option>
+            {subjects.map((subject) => (
+              <option key={subject.$id} value={subject.$id}>
+                {subject.name}
+              </option>
+            ))}
+          </select>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => toast.info("Экспорт посещаемости в разработке")}
+            icon={<Download className="w-4 h-4" />}
+          >
+            Экспорт
+          </Button>
+        </div>
+      </div>
+
+      {/* Статистика посещаемости */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card padding="md">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-600">
+                Общая посещаемость
+              </p>
+              <p className="text-2xl font-bold text-slate-900">
+                {Math.round(attendanceStats?.attendanceRate || 0)}%
+              </p>
+            </div>
+            <div className="p-3 bg-purple-100 rounded-lg">
+              <BarChart3 className="w-6 h-6 text-purple-600" />
+            </div>
+          </div>
+        </Card>
+
+        <Card padding="md">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-600">
+                Присутствовал
+              </p>
+              <p className="text-2xl font-bold text-slate-900">
+                {attendanceStats?.presentCount || 0}
+              </p>
+            </div>
+            <div className="p-3 bg-emerald-100 rounded-lg">
+              <CheckCircle className="w-6 h-6 text-emerald-600" />
+            </div>
+          </div>
+        </Card>
+
+        <Card padding="md">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-600">Отсутствовал</p>
+              <p className="text-2xl font-bold text-slate-900">
+                {attendanceStats?.absentCount || 0}
+              </p>
+            </div>
+            <div className="p-3 bg-red-100 rounded-lg">
+              <XCircle className="w-6 h-6 text-red-600" />
+            </div>
+          </div>
+        </Card>
+
+        <Card padding="md">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-600">Опозданий</p>
+              <p className="text-2xl font-bold text-slate-900">
+                {attendanceStats?.lateCount || 0}
+              </p>
+            </div>
+            <div className="p-3 bg-orange-100 rounded-lg">
+              <AlertCircle className="w-6 h-6 text-orange-600" />
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* История посещаемости */}
+      <Card padding="md">
+        <div className="border-b border-slate-200 pb-4 mb-6">
+          <h3 className="text-lg font-medium text-slate-900">
+            История посещений
+          </h3>
+        </div>
+
+        {attendanceHistory.length > 0 ? (
+          <div className="space-y-4">
+            {attendanceHistory.map((record, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between p-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <div className="flex items-center space-x-4">
+                  <div className="text-sm text-slate-500">
+                    {formatDate(record.$createdAt, "datetime")}
+                  </div>
+                  <div className="w-px h-8 bg-slate-200"></div>
+                  <div>
+                    <div className="text-sm font-medium text-slate-900">
+                      Занятие #{record.classId.slice(-6)}
+                    </div>
+                    {record.notes && (
+                      <div className="text-xs text-slate-500 mt-1">
+                        {record.notes}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <Badge
+                  variant={
+                    record.status === AttendanceStatus.PRESENT
+                      ? "success"
+                      : record.status === AttendanceStatus.ABSENT
+                      ? "danger"
+                      : record.status === AttendanceStatus.LATE
+                      ? "warning"
+                      : "info"
+                  }
+                >
+                  {getAttendanceStatusLabel(record.status)}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <CheckCircle className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+            <h4 className="text-lg font-medium text-slate-900 mb-2">
+              Нет данных о посещаемости
+            </h4>
+            <p className="text-slate-600">
+              Данные о посещаемости появятся после проведения занятий
+            </p>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// Компонент вкладки профиля
+function ProfileTab({ user, group }: { user: any; group: any }) {
+  const handleUpdateProfile = () => {
+    toast.info("Редактирование профиля будет доступно в следующем обновлении");
+  };
+
+  const handleChangePassword = () => {
+    toast.info("Смена пароля будет доступна в следующем обновлении");
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-slate-900">Мой профиль</h2>
+        <Button
+          onClick={handleUpdateProfile}
+          icon={<Edit className="w-4 h-4" />}
+          variant="outline"
+        >
+          Редактировать
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Основная информация */}
+        <div className="lg:col-span-2">
+          <Card padding="md">
+            <div className="flex items-start space-x-6">
+              <div className="w-24 h-24 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full flex items-center justify-center">
+                <span className="text-3xl font-bold text-white">
+                  {user?.name?.charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-slate-900 mb-2">
+                  {user?.name}
+                </h3>
+                <p className="text-slate-600 mb-4">Студент</p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">
+                      Email
+                    </label>
+                    <div className="mt-1 flex items-center space-x-2">
+                      <Mail className="w-4 h-4 text-slate-400" />
+                      <span className="text-sm text-slate-900">
+                        {user?.email}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">
+                      Студенческий билет
+                    </label>
+                    <div className="mt-1">
+                      <span className="text-sm text-slate-900 font-mono">
+                        {user?.studentId || "Не указан"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">
+                      Группа
+                    </label>
+                    <div className="mt-1">
+                      <span className="text-sm text-slate-900">
+                        {group?.name || "Не назначена"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">
+                      Курс
+                    </label>
+                    <div className="mt-1">
+                      <span className="text-sm text-slate-900">
+                        {group?.course || "—"} курс
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">
+                      Специальность
+                    </label>
+                    <div className="mt-1">
+                      <span className="text-sm text-slate-900">
+                        {group?.specialization || "Не указана"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {user?.phone && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">
+                        Телефон
+                      </label>
+                      <div className="mt-1 flex items-center space-x-2">
+                        <Phone className="w-4 h-4 text-slate-400" />
+                        <span className="text-sm text-slate-900">
+                          {user.phone}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-6 flex space-x-3">
+                  <Button
+                    onClick={handleUpdateProfile}
+                    variant="primary"
+                    icon={<Edit className="w-4 h-4" />}
+                  >
+                    Редактировать профиль
+                  </Button>
+                  <Button
+                    onClick={handleChangePassword}
+                    variant="outline"
+                    icon={<Settings className="w-4 h-4" />}
+                  >
+                    Сменить пароль
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Дополнительная информация */}
+        <div className="space-y-6">
+          {/* Статистика профиля */}
+          <Card padding="md">
+            <h3 className="text-lg font-medium text-slate-900 mb-4">
+              Статистика
+            </h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Дата регистрации</span>
+                <span className="text-sm font-medium text-slate-900">
+                  {formatDate(user?.$createdAt, "short")}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Статус аккаунта</span>
+                <Badge variant={user?.isActive ? "success" : "warning"}>
+                  {user?.isActive ? "Активен" : "Неактивен"}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">ID пользователя</span>
+                <span className="text-xs font-mono text-slate-500">
+                  {user?.$id?.slice(-8)}
+                </span>
+              </div>
+            </div>
+          </Card>
+
+          {/* Быстрые действия */}
+          <Card padding="md">
+            <h3 className="text-lg font-medium text-slate-900 mb-4">
+              Быстрые действия
+            </h3>
+            <div className="space-y-3">
+              <Button
+                variant="outline"
+                fullWidth
+                onClick={() => toast.info("Скачивание справки в разработке")}
+                icon={<Download className="w-4 h-4" />}
+              >
+                Скачать справку
+              </Button>
+              <Button
+                variant="outline"
+                fullWidth
+                onClick={() => toast.info("Настройки уведомлений в разработке")}
+                icon={<Bell className="w-4 h-4" />}
+              >
+                Настройки уведомлений
+              </Button>
+              <Button
+                variant="outline"
+                fullWidth
+                onClick={() => toast.info("Обратная связь в разработке")}
+                icon={<Mail className="w-4 h-4" />}
+              >
+                Связаться с поддержкой
+              </Button>
+            </div>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
@@ -307,7 +950,7 @@ export default function StudentDashboard() {
 // Компонент карточки статистики
 interface StatCardProps {
   title: string;
-  value: string;
+  value: number;
   icon: React.ElementType;
   color: string;
   trend?: string;
@@ -323,7 +966,7 @@ function StatCard({
   trendUp,
 }: StatCardProps) {
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+    <Card padding="md">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-slate-600">{title}</p>
@@ -344,7 +987,7 @@ function StatCard({
           <Icon className="w-6 h-6 text-white" />
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -361,14 +1004,14 @@ interface ScheduleItemProps {
 
 function ScheduleItem({ item }: ScheduleItemProps) {
   return (
-    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
       <div className="flex items-center space-x-4">
         <div className="text-center">
           <div className="text-sm font-medium text-slate-900">
-            {item.time.split(" - ")[0]}
+            {item.time.split("-")[0]}
           </div>
           <div className="text-xs text-slate-500">
-            {item.time.split(" - ")[1]}
+            {item.time.split("-")[1]}
           </div>
         </div>
         <div className="w-px h-12 bg-slate-200"></div>
@@ -382,182 +1025,76 @@ function ScheduleItem({ item }: ScheduleItemProps) {
         </div>
       </div>
       <div className="text-right">
-        <span
-          className={`text-xs px-2 py-1 rounded-full ${
+        <Badge
+          variant={
             item.type === "Лекция"
-              ? "bg-blue-100 text-blue-800"
+              ? "primary"
               : item.type === "Практика"
-              ? "bg-emerald-100 text-emerald-800"
-              : "bg-purple-100 text-purple-800"
-          }`}
+              ? "success"
+              : "secondary"
+          }
         >
           {item.type}
-        </span>
+        </Badge>
       </div>
     </div>
   );
 }
 
-// Компонент вкладки расписания
-function ScheduleTab({
-  currentWeekDays,
-  today,
+// Компонент компактной карточки расписания
+function ScheduleCard({
+  item,
+  compact = false,
 }: {
-  currentWeekDays: Date[];
-  today: Date;
+  item: any;
+  compact?: boolean;
 }) {
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-slate-900">Расписание</h2>
-
-      <div className="text-center py-12">
-        <Calendar className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-slate-900 mb-2">
-          Расписание на неделю
-        </h3>
-        <p className="text-slate-600">Функция в разработке</p>
-        <button
-          onClick={() =>
-            toast.info("Расписание будет добавлено в следующем обновлении")
-          }
-          className="mt-4 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+    <div
+      className={`bg-blue-50 border border-blue-200 rounded-lg ${
+        compact ? "p-2" : "p-3"
+      } hover:shadow-sm transition-all`}
+    >
+      <div className="space-y-1">
+        <div
+          className={`font-medium text-blue-900 ${
+            compact ? "text-xs" : "text-sm"
+          } leading-tight`}
         >
-          Уведомить о готовности
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// Компонент вкладки посещаемости
-function AttendanceTab({ attendanceHistory }: { attendanceHistory: any[] }) {
-  return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-slate-900">Моя посещаемость</h2>
-
-      <div className="bg-white rounded-lg shadow-sm border border-slate-200">
-        <div className="px-6 py-4 border-b border-slate-200">
-          <h3 className="text-lg font-medium text-slate-900">
-            История посещений
-          </h3>
+          {item.subject}
         </div>
-        <div className="p-6">
-          <div className="space-y-4">
-            {attendanceHistory.map((record, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between p-4 bg-slate-50 rounded-lg"
-              >
-                <div className="flex items-center space-x-4">
-                  <div className="text-sm text-slate-500">
-                    {new Date(record.date).toLocaleDateString("ru-RU", {
-                      weekday: "short",
-                      day: "numeric",
-                      month: "short",
-                    })}
-                  </div>
-                  <div className="w-px h-8 bg-slate-200"></div>
-                  <div>
-                    <div className="text-sm font-medium text-slate-900">
-                      {record.subject}
-                    </div>
-                  </div>
-                </div>
-                <span
-                  className={`text-xs px-3 py-1 rounded-full ${getAttendanceStatusColor(
-                    record.status
-                  )}`}
-                >
-                  {getAttendanceStatusLabel(record.status)}
-                </span>
-              </div>
-            ))}
-          </div>
 
-          <div className="mt-6 text-center">
-            <button
-              onClick={() =>
-                toast.info("Экспорт посещаемости будет доступен скоро")
-              }
-              className="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-200 transition-colors"
-            >
-              Экспортировать историю
-            </button>
-          </div>
+        <div
+          className={`flex items-center ${
+            compact ? "text-xs" : "text-sm"
+          } text-blue-700`}
+        >
+          <Clock className="w-3 h-3 mr-1" />
+          {item.time}
         </div>
-      </div>
-    </div>
-  );
-}
 
-// Компонент вкладки профиля
-function ProfileTab({ user }: { user: any }) {
-  const handleUpdateProfile = () => {
-    toast.info("Редактирование профиля будет доступно в следующем обновлении");
-  };
-
-  const handleChangePassword = () => {
-    toast.info("Смена пароля будет доступна в следующем обновлении");
-  };
-
-  return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-slate-900">Мой профиль</h2>
-
-      <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-        <div className="flex items-start space-x-6">
-          <div className="w-20 h-20 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full flex items-center justify-center">
-            <span className="text-2xl font-bold text-white">
-              {user?.name?.charAt(0).toUpperCase()}
-            </span>
-          </div>
-          <div className="flex-1">
-            <h3 className="text-xl font-bold text-slate-900">{user?.name}</h3>
-            <p className="text-slate-600">Студент</p>
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700">
-                  Email
-                </label>
-                <p className="mt-1 text-sm text-slate-900">{user?.email}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">
-                  Группа
-                </label>
-                <p className="mt-1 text-sm text-slate-900">ИТ-301</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">
-                  Курс
-                </label>
-                <p className="mt-1 text-sm text-slate-900">3 курс</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">
-                  Специальность
-                </label>
-                <p className="mt-1 text-sm text-slate-900">
-                  Информационные технологии
-                </p>
-              </div>
+        {!compact && (
+          <>
+            <div className="flex items-center text-xs text-blue-600">
+              <User className="w-3 h-3 mr-1" />
+              {item.teacher}
             </div>
 
-            <div className="mt-6 flex space-x-3">
-              <button
-                onClick={handleUpdateProfile}
-                className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
-              >
-                Редактировать профиль
-              </button>
-              <button
-                onClick={handleChangePassword}
-                className="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-200 transition-colors"
-              >
-                Сменить пароль
-              </button>
+            <div className="flex items-center text-xs text-blue-600">
+              <MapPin className="w-3 h-3 mr-1" />
+              {item.classroom}
             </div>
-          </div>
+          </>
+        )}
+
+        <div className="pt-1">
+          <Badge
+            variant="outline"
+            size="sm"
+            className={compact ? "text-xs px-1 py-0.5" : ""}
+          >
+            {item.type}
+          </Badge>
         </div>
       </div>
     </div>
