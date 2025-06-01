@@ -215,6 +215,16 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
   const attendanceRate =
     totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : 0;
 
+  // Обработчики изменения значений для Select
+  const handleBulkActionChange = (value: string | number) => {
+    setBulkAction(String(value) as AttendanceStatus | "");
+  };
+
+  const handleStudentStatusChange =
+    (studentId: string) => (value: string | number) => {
+      updateStudentStatus(studentId, String(value) as AttendanceStatus);
+    };
+
   return (
     <Modal
       isOpen={isOpen}
@@ -299,7 +309,7 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
                 ...statusOptions,
               ]}
               value={bulkAction}
-              onChange={setBulkAction}
+              onChange={handleBulkActionChange}
               placeholder="Выберите действие"
             />
             <Button
@@ -357,12 +367,7 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
                     <Select
                       options={statusOptions}
                       value={studentData.status}
-                      onChange={(value) =>
-                        updateStudentStatus(
-                          student.id,
-                          value as AttendanceStatus
-                        )
-                      }
+                      onChange={handleStudentStatusChange(student.id)}
                       fullWidth
                     />
                     <Input

@@ -24,6 +24,7 @@ import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { Badge } from "@/components/ui/Badge";
 import { getWeekDates, formatDate } from "@/utils/dates";
 
+// Локальный интерфейс для элементов расписания с нужными свойствами
 interface ScheduleItem {
   id: string;
   subject: string;
@@ -100,8 +101,42 @@ export const ScheduleTab: React.FC = () => {
     },
   ];
 
-  const currentSchedule = schedule.length > 0 ? schedule : mockSchedule;
+  // Преобразуем данные из Schedule в ScheduleItem если они есть
+  const convertScheduleToScheduleItem = (
+    scheduleData: any[]
+  ): ScheduleItem[] => {
+    return scheduleData.map((item) => ({
+      id: item.$id || item.id,
+      subject: item.subjectId, // В реальном приложении здесь будет название предмета
+      group: item.groupId, // В реальном приложении здесь будет код группы
+      time: `${item.startTime} - ${item.endTime}`,
+      classroom: item.classroom,
+      dayOfWeek: item.dayOfWeek,
+      weekType: item.weekType || "all",
+      type: "lecture", // Значение по умолчанию
+    }));
+  };
+  console.log(schedule, "schedulescheduleschedulescheduleschedule");
+
+  const currentSchedule =
+    schedule.length > 0
+      ? convertScheduleToScheduleItem(schedule)
+      : mockSchedule;
+
   const weekDates = getWeekDates(currentWeek);
+
+  // Отладочная информация для проверки дат
+  console.log("=== SCHEDULE DEBUG ===");
+  console.log("Current week date:", currentWeek);
+  console.log(
+    "Week dates:",
+    weekDates.map((date, i) => ({
+      index: i,
+      date: formatDate(date, "iso"),
+      dayName: date.toLocaleDateString("ru-RU", { weekday: "long" }),
+      jsDay: date.getDay(),
+    }))
+  );
 
   // Фильтрация расписания по группе
   const filteredSchedule =
@@ -168,6 +203,11 @@ export const ScheduleTab: React.FC = () => {
     }
   };
 
+  // Обработчик изменения группы
+  const handleGroupChange = (value: string | number) => {
+    setSelectedGroup(String(value));
+  };
+
   if (isLoading) {
     return <LoadingSpinner size="lg" text="Загрузка расписания..." />;
   }
@@ -194,7 +234,7 @@ export const ScheduleTab: React.FC = () => {
               })),
             ]}
             value={selectedGroup}
-            onChange={(value) => setSelectedGroup(value as string)}
+            onChange={handleGroupChange}
             placeholder="Выберите группу"
           />
 
@@ -250,11 +290,31 @@ export const ScheduleTab: React.FC = () => {
       {filteredSchedule.length > 0 ? (
         <div className="grid grid-cols-7 gap-4">
           {weekDates.map((date, index) => {
-            const dayOfWeek =
-              Object.values(WeekDay)[index === 0 ? 6 : index - 1]; // Корректировка для воскресенья
+            // Правильное сопоставление: weekDates начинается с понедельника (index 0)
+            const weekDayMapping = [
+              WeekDay.MONDAY, // index 0
+              WeekDay.TUESDAY, // index 1
+              WeekDay.WEDNESDAY, // index 2
+              WeekDay.THURSDAY, // index 3
+              WeekDay.FRIDAY, // index 4
+              WeekDay.SATURDAY, // index 5
+              WeekDay.SUNDAY, // index 6
+            ];
+
+            const dayOfWeek = weekDayMapping[index];
             const daySchedule = scheduleByDay[dayOfWeek] || [];
             const isToday =
               formatDate(date, "iso") === formatDate(new Date(), "iso");
+
+            // Отладочная информация для первого дня
+            if (index === 0) {
+              console.log("First day debug:", {
+                date: formatDate(date, "iso"),
+                dayOfWeek,
+                jsDay: date.getDay(),
+                dayName: date.toLocaleDateString("ru-RU", { weekday: "long" }),
+              });
+            }
 
             return (
               <Card
@@ -275,6 +335,9 @@ export const ScheduleTab: React.FC = () => {
                     }`}
                   >
                     {date.getDate()}
+                  </div>
+                  <div className="text-xs text-slate-400 mb-1">
+                    {date.toLocaleDateString("ru-RU", { month: "short" })}
                   </div>
                   {isToday && (
                     <Badge variant="primary" size="sm" className="mt-1">
@@ -316,7 +379,6 @@ export const ScheduleTab: React.FC = () => {
                         >
                           {getTypeLabel(scheduleItem.type)}
                         </Badge>
-
                         {scheduleItem.weekType !== "all" && (
                           <Badge variant="outline" size="sm">
                             {scheduleItem.weekType === "odd" ? "Нечет" : "Чет"}
@@ -398,6 +460,61 @@ export const ScheduleTab: React.FC = () => {
             </div>
           </Card>
         </div>
+      )}
+
+      {/* Отладочная информация для дат */}
+      {process.env.NODE_ENV === "development" && (
+        <details className="mt-4">
+          <summary className="cursor-pointer p-3 bg-yellow-50 rounded-lg border border-yellow-200 hover:bg-yellow-100">
+            <span className="font-medium text-yellow-800">
+              🔧 Отладка календаря (только в development)
+            </span>
+          </summary>
+          <div className="mt-2 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+            <div className="text-sm space-y-2">
+              <div>
+                <strong>Текущая неделя:</strong> {currentWeek.toISOString()}
+              </div>
+              <div>
+                <strong>Сегодня:</strong>{" "}
+                {new Date().toLocaleDateString("ru-RU", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                })}
+              </div>
+
+              <div className="mt-3">
+                <strong>Дни недели в календаре:</strong>
+                <div className="grid grid-cols-7 gap-2 mt-2 text-xs">
+                  {weekDates.map((date, i) => (
+                    <div key={i} className="bg-white p-2 rounded border">
+                      <div className="font-medium">
+                        {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"][i]}
+                      </div>
+                      <div>
+                        {date.getDate()}.{date.getMonth() + 1}
+                      </div>
+                      <div className="text-gray-500">JS:{date.getDay()}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <strong>Расписание по дням:</strong>
+                <div className="text-xs mt-1">
+                  {Object.entries(scheduleByDay).map(([day, items]) => (
+                    <div key={day} className="mb-1">
+                      <span className="font-medium">{day}:</span> {items.length}{" "}
+                      занятий
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
       )}
     </div>
   );

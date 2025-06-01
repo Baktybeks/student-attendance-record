@@ -193,6 +193,19 @@ export const AnalyticsTab: React.FC = () => {
     // Здесь будет логика экспорта отчета
   };
 
+  // Обработчики изменения значений для Select
+  const handlePeriodChange = (value: string | number) => {
+    setSelectedPeriod(String(value));
+  };
+
+  const handleGroupChange = (value: string | number) => {
+    setSelectedGroup(String(value));
+  };
+
+  const handleSubjectChange = (value: string | number) => {
+    setSelectedSubject(String(value));
+  };
+
   return (
     <div className="space-y-6">
       {/* Заголовок и фильтры */}
@@ -215,7 +228,7 @@ export const AnalyticsTab: React.FC = () => {
               { value: "year", label: "За год" },
             ]}
             value={selectedPeriod}
-            onChange={setSelectedPeriod}
+            onChange={handlePeriodChange}
           />
 
           <Button

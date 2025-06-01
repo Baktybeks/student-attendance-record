@@ -225,12 +225,27 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
 
   const availableGroups = [...new Set(students.map((s) => s.group))];
 
+  // Обработчики изменения значений для Select
+  const handleGroupChange = (value: string | number) => {
+    setSelectedGroup(String(value));
+  };
+
+  const handleStatusFilterChange = (value: string | number) => {
+    setStatusFilter(String(value) as "all" | "active" | "inactive");
+  };
+
+  const handleAttendanceFilterChange = (value: string | number) => {
+    setAttendanceFilter(
+      String(value) as "all" | "good" | "warning" | "critical"
+    );
+  };
+
   // Колонки таблицы
   const columns = [
     {
       key: "student",
       title: "Студент",
-      render: (_, student: Student) => (
+      render: (_: any, student: Student) => (
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-medium">
             {student.name
@@ -249,7 +264,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     {
       key: "contact",
       title: "Контакты",
-      render: (_, student: Student) => (
+      render: (_: any, student: Student) => (
         <div>
           <div className="text-sm text-slate-900">{student.email}</div>
           {student.phone && (
@@ -267,7 +282,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     {
       key: "attendance",
       title: "Посещаемость",
-      render: (_, student: Student) => {
+      render: (_: any, student: Student) => {
         const status = getAttendanceStatus(student.attendance.rate);
         return (
           <div className="flex items-center space-x-2">
@@ -282,7 +297,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     {
       key: "activity",
       title: "Последняя активность",
-      render: (_, student: Student) => (
+      render: (_: any, student: Student) => (
         <div className="text-sm text-slate-600">
           {formatDate(new Date(student.lastActivity), "datetime")}
         </div>
@@ -291,7 +306,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     {
       key: "status",
       title: "Статус",
-      render: (_, student: Student) => (
+      render: (_: any, student: Student) => (
         <StatusBadge status={student.isActive ? "active" : "inactive"}>
           {student.isActive ? "Активен" : "Неактивен"}
         </StatusBadge>
@@ -300,7 +315,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     {
       key: "actions",
       title: "Действия",
-      render: (_, student: Student) => (
+      render: (_: any, student: Student) => (
         <div className="flex items-center space-x-2">
           <Button
             variant="ghost"
@@ -441,7 +456,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                   })),
                 ]}
                 value={selectedGroup}
-                onChange={setSelectedGroup}
+                onChange={handleGroupChange}
               />
 
               <Select
@@ -451,7 +466,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                   { value: "inactive", label: "Неактивные" },
                 ]}
                 value={statusFilter}
-                onChange={setStatusFilter}
+                onChange={handleStatusFilterChange}
               />
 
               <Select
@@ -462,7 +477,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                   { value: "critical", label: "Критично (<70%)" },
                 ]}
                 value={attendanceFilter}
-                onChange={setAttendanceFilter}
+                onChange={handleAttendanceFilterChange}
               />
             </div>
 

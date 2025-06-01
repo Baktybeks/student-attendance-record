@@ -170,6 +170,23 @@ export const AttendanceTab: React.FC = () => {
     ...new Set(mockAttendanceData.map((r) => r.subject)),
   ];
 
+  // Обработчики изменения значений для Select
+  const handleGroupChange = (value: string | number) => {
+    setSelectedGroup(String(value));
+  };
+
+  const handleSubjectChange = (value: string | number) => {
+    setSelectedSubject(String(value));
+  };
+
+  const handleStatusChange = (value: string | number) => {
+    setSelectedStatus(String(value));
+  };
+
+  const handleDateFilterChange = (value: string | number) => {
+    setDateFilter(String(value));
+  };
+
   // Колонки для таблицы
   const columns = [
     {
@@ -191,7 +208,7 @@ export const AttendanceTab: React.FC = () => {
     {
       key: "date",
       title: "Дата и время",
-      render: (_, record: AttendanceRecord) => (
+      render: (_: any, record: AttendanceRecord) => (
         <div>
           <div className="font-medium text-slate-900">
             {formatDate(new Date(record.date), "short")}
@@ -231,7 +248,7 @@ export const AttendanceTab: React.FC = () => {
     {
       key: "actions",
       title: "Действия",
-      render: (_, record: AttendanceRecord) => (
+      render: (_: any, record: AttendanceRecord) => (
         <div className="flex items-center space-x-2">
           <Button
             variant="ghost"
@@ -365,7 +382,7 @@ export const AttendanceTab: React.FC = () => {
               })),
             ]}
             value={selectedGroup}
-            onChange={setSelectedGroup}
+            onChange={handleGroupChange}
             placeholder="Группа"
           />
 
@@ -378,7 +395,7 @@ export const AttendanceTab: React.FC = () => {
               })),
             ]}
             value={selectedSubject}
-            onChange={setSelectedSubject}
+            onChange={handleSubjectChange}
             placeholder="Предмет"
           />
 
@@ -391,7 +408,7 @@ export const AttendanceTab: React.FC = () => {
               { value: AttendanceStatus.EXCUSED, label: "Уважительная" },
             ]}
             value={selectedStatus}
-            onChange={setSelectedStatus}
+            onChange={handleStatusChange}
             placeholder="Статус"
           />
 
@@ -402,7 +419,7 @@ export const AttendanceTab: React.FC = () => {
               { value: "custom", label: "Выбрать период" },
             ]}
             value={dateFilter}
-            onChange={setDateFilter}
+            onChange={handleDateFilterChange}
             placeholder="Период"
           />
         </div>
