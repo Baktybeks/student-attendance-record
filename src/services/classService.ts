@@ -231,7 +231,8 @@ export const classApi = {
             .slice(0, 32); // md5 = 32 символа
 
           return {
-            $id: `virtual-${schedule.$id}-${date}`,
+            $id: `v-${hash}`,
+            // $id: `virtual-${schedule.$id}-${date}`,
             $createdAt: new Date().toISOString(),
             $updatedAt: new Date().toISOString(),
             $permissions: [],
