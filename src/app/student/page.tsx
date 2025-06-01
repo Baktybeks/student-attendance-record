@@ -27,6 +27,7 @@ import {
   Award,
 } from "lucide-react";
 import { toast } from "react-toastify"; // Обновленный импорт
+import { LogoutButton } from "@/components/LogoutButton";
 
 export default function StudentDashboard() {
   const { user, logout } = useAuthStore();
@@ -36,11 +37,6 @@ export default function StudentDashboard() {
 
   // Получаем статистику посещаемости студента
   const { data: attendanceStats } = useStudentAttendanceStats(user?.$id || "");
-
-  const handleLogout = () => {
-    logout();
-    toast.success("Успешный выход из системы"); // Обновлено
-  };
 
   const today = new Date();
   const currentWeekDays = Array.from({ length: 7 }, (_, i) => {
@@ -132,12 +128,7 @@ export default function StudentDashboard() {
                   Студент • Группа ИТ-301
                 </p>
               </div>
-              <button
-                onClick={handleLogout}
-                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
+              <LogoutButton />
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-// src/hooks/useAuth.ts (Обновленная версия с react-toastify)
+// src/hooks/useAuth.ts (Исправленная версия с перенаправлением)
 
 import { useAuthStore } from "@/store/authStore";
 import {
@@ -6,9 +6,10 @@ import {
   useLogin,
   useLogout,
   useRegister,
-  usePermissions,
 } from "@/services/authService";
+import { usePermissions } from "@/utils/permissions";
 import { useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation"; // Добавляем импорт
 import { toast } from "react-toastify";
 import { UserRole } from "@/types";
 
@@ -29,7 +30,7 @@ interface AuthHookReturn {
     email: string,
     password: string,
     role: UserRole,
-    specialization?: string,
+    studentId?: string,
     phone?: string
   ) => Promise<any>;
   clearError: () => void;
@@ -76,6 +77,7 @@ const isValidUser = (user: any): boolean => {
 
 export function useAuth(): AuthHookReturn {
   const { user, setUser, clearUser } = useAuthStore();
+  const router = useRouter(); // Добавляем router
 
   // React Query хуки
   const {
@@ -94,7 +96,7 @@ export function useAuth(): AuthHookReturn {
   useEffect(() => {
     try {
       // Проверяем, что currentUser определен и является объектом
-      if (isValidUser(currentUser)) {
+      if (currentUser !== undefined && isValidUser(currentUser)) {
         setUser(currentUser);
       } else if (
         currentUser === null ||
@@ -161,6 +163,10 @@ export function useAuth(): AuthHookReturn {
     try {
       await logoutMutation.mutateAsync();
       clearUser();
+
+      // Перенаправляем на страницу входа
+      router.push("/login");
+
       toast.success("👋 Вы успешно вышли из системы", {
         position: "top-right",
         autoClose: 3000,
@@ -170,8 +176,10 @@ export function useAuth(): AuthHookReturn {
         draggable: true,
       });
     } catch (error: any) {
-      // Даже при ошибке очищаем локальное состояние
+      // Даже при ошибке очищаем локальное состояние и перенаправляем
       clearUser();
+      router.push("/login");
+
       console.warn("Ошибка при выходе, но сессия очищена:", error);
       toast.warning("⚠️ Произошла ошибка при выходе, но сессия очищена", {
         position: "top-right",
@@ -181,9 +189,8 @@ export function useAuth(): AuthHookReturn {
         pauseOnHover: true,
         draggable: true,
       });
-      throw error;
     }
-  }, [logoutMutation, clearUser]);
+  }, [logoutMutation, clearUser, router]);
 
   const register = useCallback(
     async (
@@ -191,7 +198,7 @@ export function useAuth(): AuthHookReturn {
       email: string,
       password: string,
       role: UserRole,
-      specialization?: string,
+      studentId?: string,
       phone?: string
     ) => {
       try {
@@ -200,7 +207,7 @@ export function useAuth(): AuthHookReturn {
           email,
           password,
           role,
-          specialization,
+          studentId,
           phone,
         });
 
@@ -305,10 +312,10 @@ export function useAuth(): AuthHookReturn {
     null;
 
   // Проверки ролей
-  const isSuper = user?.role === UserRole.ADMIN; // Изменено с SUPER_ADMIN на ADMIN
-  const isManager = user?.role === UserRole.TEACHER; // Изменено с MANAGER на TEACHER
-  const isTechnician = user?.role === UserRole.TEACHER; // Адаптировано для системы
-  const isRequester = user?.role === UserRole.STUDENT; // Изменено с REQUESTER на STUDENT
+  const isSuper = user?.role === UserRole.ADMIN;
+  const isManager = user?.role === UserRole.TEACHER;
+  const isTechnician = user?.role === UserRole.TEACHER;
+  const isRequester = user?.role === UserRole.STUDENT;
 
   return {
     // Состояние пользователя
@@ -338,11 +345,11 @@ export function useAuth(): AuthHookReturn {
 
     // Проверки прав доступа (из usePermissions)
     canManageUsers: permissions.canManageUsers,
-    canManageRequests: permissions.canCreateClasses, // Адаптировано
-    canAssignTechnicians: permissions.canAssignTeachers, // Адаптировано
-    canViewAllRequests: permissions.canViewAllAttendance, // Адаптировано
-    canCreateRequests: permissions.canCreateClasses, // Адаптировано
-    canUpdateRequestStatus: permissions.canUpdateAttendance, // Адаптировано
+    canManageRequests: permissions.canCreateClasses,
+    canAssignTechnicians: permissions.canAssignTeachers,
+    canViewAllRequests: permissions.canViewAllAttendance,
+    canCreateRequests: permissions.canCreateClasses,
+    canUpdateRequestStatus: permissions.canUpdateAttendance,
   };
 }
 

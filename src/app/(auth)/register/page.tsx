@@ -2,7 +2,7 @@
 
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useRegister, useLogin } from "@/services/authService";
@@ -19,7 +19,8 @@ import {
   Phone,
   Users,
 } from "lucide-react";
-import { toast } from "react-toastify"; // Обновленный импорт
+import { toast } from "react-toastify";
+import { SystemStatusDebug } from "@/components/SystemStatusDebug";
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -27,18 +28,50 @@ export default function RegisterPage() {
     email: "",
     password: "",
     confirmPassword: "",
-    role: UserRole.STUDENT,
+    role: UserRole.ADMIN, // По умолчанию админ для первого пользователя
     studentId: "",
     phone: "",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isFirstUser, setIsFirstUser] = useState<boolean | null>(null);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(true);
 
   const router = useRouter();
   const { setUser } = useAuthStore();
   const registerMutation = useRegister();
   const loginMutation = useLogin();
+
+  // Проверяем, является ли пользователь первым в системе
+  useEffect(() => {
+    const checkFirstUser = async () => {
+      try {
+        const response = await fetch("/api/check-admins");
+        if (response.ok) {
+          const data = await response.json();
+          const isFirst = data.isFirstUser || data.adminCount === 0;
+          setIsFirstUser(isFirst);
+
+          // Если это первый пользователь, устанавливаем роль админа
+          if (isFirst) {
+            setFormData((prev) => ({ ...prev, role: UserRole.ADMIN }));
+          } else {
+            setFormData((prev) => ({ ...prev, role: UserRole.STUDENT }));
+          }
+        }
+      } catch (error) {
+        console.error("Ошибка проверки статуса:", error);
+        // Если ошибка API, предполагаем что это первый пользователь
+        setIsFirstUser(true);
+        setFormData((prev) => ({ ...prev, role: UserRole.ADMIN }));
+      } finally {
+        setIsCheckingStatus(false);
+      }
+    };
+
+    checkFirstUser();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,53 +79,89 @@ export default function RegisterPage() {
 
     // Валидация пароля
     if (formData.password !== formData.confirmPassword) {
-      toast.error("Пароли не совпадают"); // Обновлено
+      toast.error("Пароли не совпадают");
       setIsLoading(false);
       return;
     }
 
     if (formData.password.length < 8) {
-      toast.error("Пароль должен содержать минимум 8 символов"); // Обновлено
+      toast.error("Пароль должен содержать минимум 8 символов");
       setIsLoading(false);
       return;
     }
 
     try {
+      console.log("Отправляем данные для регистрации:", {
+        name: formData.name,
+        email: formData.email,
+        role: formData.role,
+        studentId: formData.studentId,
+      });
+
       const result = await registerMutation.mutateAsync({
         name: formData.name,
         email: formData.email,
         password: formData.password,
         role: formData.role,
-        studentId: formData.studentId || undefined,
-        phone: formData.phone || undefined,
+        studentId:
+          !isFirstUser && formData.studentId ? formData.studentId : undefined,
+        phone: !isFirstUser && formData.phone ? formData.phone : undefined,
       });
 
-      if (result.isFirstUser) {
+      console.log("Результат регистрации:", result);
+
+      if (result.isFirstUser || isFirstUser) {
+        console.log("Первый пользователь зарегистрирован как администратор");
         toast.success(
-          // Обновлено
-          "Первый пользователь создан как Администратор! Выполняется автоматический вход..."
+          "🎉 Поздравляем! Вы стали первым администратором системы. Выполняется автоматический вход...",
+          { autoClose: 5000 }
         );
+
         // Автоматически логиним первого пользователя
         try {
-          await loginMutation.mutateAsync({
+          console.log("Выполняем автоматический вход...");
+          const loggedInUser = await loginMutation.mutateAsync({
             email: formData.email,
             password: formData.password,
           });
-          router.push("/admin");
+
+          console.log("Автоматический вход выполнен успешно:", loggedInUser);
+          setUser(loggedInUser);
+
+          // Небольшая задержка для показа уведомления
+          setTimeout(() => {
+            router.push("/admin");
+          }, 2000);
         } catch (loginError) {
           console.error("Ошибка автоматического входа:", loginError);
-          toast.info("Пожалуйста, войдите в систему"); // Обновлено
+          toast.warning(
+            "Регистрация успешна, но произошла ошибка автоматического входа. Пожалуйста, войдите вручную."
+          );
           router.push("/login");
         }
       } else {
+        console.log("Обычный пользователь зарегистрирован, ожидает активации");
         toast.success(
-          // Обновлено
-          "Регистрация успешна! Ожидайте активации вашего аккаунта администратором."
+          "✅ Регистрация успешна! Ваш аккаунт ожидает активации администратором. Вы получите уведомление на email после активации.",
+          { autoClose: 7000 }
         );
-        router.push("/login");
+
+        setTimeout(() => {
+          router.push("/login");
+        }, 3000);
       }
     } catch (error: any) {
-      toast.error(error.message || "Ошибка при регистрации"); // Обновлено
+      console.error("Ошибка при регистрации:", error);
+
+      const message = error?.message || "Ошибка при регистрации";
+
+      if (message.includes("уже существует")) {
+        toast.error("📧 Пользователь с таким email уже зарегистрирован");
+      } else if (message.includes("некорректные данные")) {
+        toast.error("❌ Проверьте правильность введенных данных");
+      } else {
+        toast.error(`❌ ${message}`);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -107,6 +176,17 @@ export default function RegisterPage() {
     });
   };
 
+  if (isCheckingStatus) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-600">Проверка состояния системы...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -118,13 +198,17 @@ export default function RegisterPage() {
           <h1 className="text-3xl font-bold text-slate-900 mb-2">
             AttendTrack
           </h1>
-          <p className="text-slate-600">Регистрация в системе</p>
+          <p className="text-slate-600">
+            {isFirstUser
+              ? "Создание аккаунта администратора"
+              : "Регистрация в системе"}
+          </p>
         </div>
 
         {/* Форма регистрации */}
         <div className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* ФИО */}
+            {/* ФИО - всегда первое поле */}
             <div>
               <label
                 htmlFor="name"
@@ -165,37 +249,43 @@ export default function RegisterPage() {
                   onChange={handleInputChange}
                   required
                   className="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                  placeholder="student@university.edu"
+                  placeholder={
+                    isFirstUser
+                      ? "admin@university.edu"
+                      : "student@university.edu"
+                  }
                 />
               </div>
             </div>
 
-            {/* Роль */}
-            <div>
-              <label
-                htmlFor="role"
-                className="block text-sm font-medium text-slate-700 mb-2"
-              >
-                Роль
-              </label>
-              <div className="relative">
-                <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <select
-                  id="role"
-                  name="role"
-                  value={formData.role}
-                  onChange={handleInputChange}
-                  className="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white"
+            {/* Роль - только для не-первых пользователей */}
+            {!isFirstUser && (
+              <div>
+                <label
+                  htmlFor="role"
+                  className="block text-sm font-medium text-slate-700 mb-2"
                 >
-                  <option value={UserRole.STUDENT}>Студент</option>
-                  <option value={UserRole.TEACHER}>Преподаватель</option>
-                  <option value={UserRole.ADMIN}>Администратор</option>
-                </select>
+                  Роль
+                </label>
+                <div className="relative">
+                  <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <select
+                    id="role"
+                    name="role"
+                    value={formData.role}
+                    onChange={handleInputChange}
+                    className="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white"
+                  >
+                    <option value={UserRole.STUDENT}>Студент</option>
+                    <option value={UserRole.TEACHER}>Преподаватель</option>
+                    <option value={UserRole.ADMIN}>Администратор</option>
+                  </select>
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Студенческий билет (только для студентов) */}
-            {formData.role === UserRole.STUDENT && (
+            {/* Студенческий билет - только для студентов и не для первого пользователя */}
+            {!isFirstUser && formData.role === UserRole.STUDENT && (
               <div>
                 <label
                   htmlFor="studentId"
@@ -215,27 +305,29 @@ export default function RegisterPage() {
               </div>
             )}
 
-            {/* Телефон */}
-            <div>
-              <label
-                htmlFor="phone"
-                className="block text-sm font-medium text-slate-700 mb-2"
-              >
-                Телефон (необязательно)
-              </label>
-              <div className="relative">
-                <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input
-                  id="phone"
-                  name="phone"
-                  type="tel"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                  className="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                  placeholder="+996 700 123 456"
-                />
+            {/* Телефон - только для не-первых пользователей */}
+            {!isFirstUser && (
+              <div>
+                <label
+                  htmlFor="phone"
+                  className="block text-sm font-medium text-slate-700 mb-2"
+                >
+                  Телефон (необязательно)
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    id="phone"
+                    name="phone"
+                    type="tel"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    className="w-full pl-11 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    placeholder="+996 700 123 456"
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Пароль */}
             <div>
@@ -316,7 +408,11 @@ export default function RegisterPage() {
               ) : (
                 <>
                   <UserPlus className="w-5 h-5" />
-                  <span>Зарегистрироваться</span>
+                  <span>
+                    {isFirstUser
+                      ? "Создать аккаунт администратора"
+                      : "Зарегистрироваться"}
+                  </span>
                 </>
               )}
             </button>
@@ -335,23 +431,39 @@ export default function RegisterPage() {
             </p>
           </div>
 
-          {/* Информация о активации */}
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-            <h3 className="text-sm font-medium text-blue-900 mb-2">
-              📝 Информация о регистрации:
-            </h3>
-            <ul className="text-xs text-blue-800 space-y-1">
-              <li>
-                • Студенты и преподаватели ожидают активации администратором
-              </li>
-              <li>
-                • Первый пользователь автоматически становится администратором
-              </li>
-              <li>• После активации вы получите уведомление на email</li>
-            </ul>
-          </div>
+          {/* Информация о активации - только для не-первых пользователей */}
+          {!isFirstUser && (
+            <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+              <h3 className="text-sm font-medium text-blue-900 mb-2">
+                📝 Информация о регистрации:
+              </h3>
+              <ul className="text-xs text-blue-800 space-y-1">
+                <li>
+                  • Студенты и преподаватели ожидают активации администратором
+                </li>
+                <li>• После активации вы получите уведомление на email</li>
+              </ul>
+            </div>
+          )}
+
+          {/* Информация для первого пользователя */}
+          {isFirstUser && (
+            <div className="mt-6 p-4 bg-green-50 rounded-lg">
+              <h3 className="text-sm font-medium text-green-900 mb-2">
+                🎉 Первый пользователь:
+              </h3>
+              <ul className="text-xs text-green-800 space-y-1">
+                <li>• Вы станете администратором системы с полными правами</li>
+                <li>• После регистрации будет выполнен автоматический вход</li>
+                <li>• Вы сможете активировать других пользователей</li>
+              </ul>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Компонент отладки (только в разработке) */}
+      <SystemStatusDebug />
     </div>
   );
 }

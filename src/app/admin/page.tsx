@@ -22,6 +22,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { toast } from "react-toastify"; // Обновленный импорт
+import { LogoutButton } from "@/components/LogoutButton";
 
 export default function AdminDashboard() {
   const { user, logout } = useAuthStore();
@@ -32,11 +33,6 @@ export default function AdminDashboard() {
   const { data: allUsers = [], isLoading: usersLoading } = useAllUsers();
   const { data: students = [] } = useUsersByRole(UserRole.STUDENT);
   const { data: teachers = [] } = useUsersByRole(UserRole.TEACHER);
-
-  const handleLogout = () => {
-    logout();
-    toast.success("Успешный выход из системы"); // Обновленное использование
-  };
 
   // Статистика
   const stats = {
@@ -79,12 +75,7 @@ export default function AdminDashboard() {
                   {getRoleLabel(user?.role!)}
                 </p>
               </div>
-              <button
-                onClick={handleLogout}
-                className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
+              <LogoutButton />
             </div>
           </div>
         </div>

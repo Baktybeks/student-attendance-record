@@ -1,15 +1,15 @@
-// src/app/(auth)/login/page.tsx (Обновленная версия)
+// src/app/(auth)/login/page.tsx (Исправленная версия)
 
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLogin } from "@/services/authService";
 import { useAuthStore } from "@/store/authStore";
 import { UserRole } from "@/types";
 import { Eye, EyeOff, GraduationCap, LogIn, Mail, Lock } from "lucide-react";
-import { toast } from "react-toastify"; // Обновленный импорт
+import { toast } from "react-toastify";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -18,39 +18,77 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   const router = useRouter();
-  const { setUser } = useAuthStore();
+  const { user, setUser } = useAuthStore();
   const loginMutation = useLogin();
+
+  // Если пользователь уже авторизован, перенаправляем его
+  useEffect(() => {
+    if (user && user.isActive) {
+      const redirectPath = getDefaultPathForRole(user.role);
+      console.log(
+        "Пользователь уже авторизован, перенаправление на:",
+        redirectPath
+      );
+      router.replace(redirectPath); // Используем replace вместо push
+    }
+  }, [user, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      const user = await loginMutation.mutateAsync({ email, password });
-      setUser(user);
+      console.log("Попытка входа:", email);
 
-      toast.success(`Добро пожаловать, ${user.name}!`); // Обновлено
+      const loggedInUser = await loginMutation.mutateAsync({ email, password });
+      console.log("Пользователь авторизован:", loggedInUser);
 
-      // Перенаправление в зависимости от роли
-      switch (user.role) {
-        case UserRole.ADMIN:
-          router.push("/admin");
-          break;
-        case UserRole.TEACHER:
-          router.push("/teacher");
-          break;
-        case UserRole.STUDENT:
-          router.push("/student");
-          break;
-        default:
-          router.push("/");
-      }
+      // Обновляем состояние
+      setUser(loggedInUser);
+
+      // Показываем уведомление
+      toast.success(`Добро пожаловать, ${loggedInUser.name}!`);
+
+      // Перенаправляем сразу
+      const redirectPath = getDefaultPathForRole(loggedInUser.role);
+      console.log("Перенаправление на:", redirectPath);
+      router.replace(redirectPath); // Используем replace
     } catch (error: any) {
-      toast.error(error.message || "Ошибка при входе"); // Обновлено
+      console.error("Ошибка входа:", error);
+
+      const message = error?.message || "Ошибка при входе";
+
+      if (
+        message.includes("не активирован") ||
+        message.includes("not activated")
+      ) {
+        toast.warning("⚠️ Ваш аккаунт ожидает активации администратором", {
+          position: "top-center",
+          autoClose: 5000,
+        });
+      } else if (message.includes("Неверный") || message.includes("Invalid")) {
+        toast.error("❌ Неверный email или пароль");
+      } else {
+        toast.error(`❌ ${message}`);
+      }
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Функция для получения дефолтного пути по роли
+  function getDefaultPathForRole(role: UserRole): string {
+    switch (role) {
+      case UserRole.ADMIN:
+        return "/admin";
+      case UserRole.TEACHER:
+        return "/teacher";
+      case UserRole.STUDENT:
+        return "/student";
+      default:
+        return "/login";
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
@@ -152,27 +190,6 @@ export default function LoginPage() {
                 Зарегистрироваться
               </Link>
             </p>
-          </div>
-
-          {/* Демо аккаунты */}
-          <div className="mt-8 p-4 bg-slate-50 rounded-lg">
-            <h3 className="text-sm font-medium text-slate-700 mb-3">
-              Демо аккаунты:
-            </h3>
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-slate-600">Администратор:</span>
-                <span className="font-mono">admin@demo.com / admin123</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600">Преподаватель:</span>
-                <span className="font-mono">teacher@demo.com / teacher123</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600">Студент:</span>
-                <span className="font-mono">student@demo.com / student123</span>
-              </div>
-            </div>
           </div>
         </div>
 

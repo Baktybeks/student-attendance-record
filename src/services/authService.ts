@@ -66,65 +66,145 @@ export const authApi = {
   // Проверка, является ли пользователь первым (для автоматического назначения админом)
   checkIsFirstUser: async (): Promise<boolean> => {
     try {
+      console.log("Проверяем, является ли пользователь первым...");
+
+      // Сначала пробуем использовать API роут
+      try {
+        const response = await fetch("/api/check-admins");
+        if (response.ok) {
+          const data = await response.json();
+          console.log("Результат проверки через API:", data);
+          return data.isFirstUser;
+        }
+      } catch (apiError) {
+        console.warn(
+          "API роут недоступен, используем прямой запрос:",
+          apiError
+        );
+      }
+
+      // Если API роут не работает, делаем прямой запрос к базе данных
       const response = await databases.listDocuments(
         appwriteConfig.databaseId,
         appwriteConfig.collections.users,
-        [Query.equal("role", UserRole.ADMIN)]
+        [Query.equal("role", UserRole.ADMIN), Query.limit(1)]
       );
 
-      return response.total === 0;
+      console.log("Найдено администраторов в базе:", response.total);
+
+      const isFirstUser = response.total === 0;
+      console.log("Является ли первым пользователем:", isFirstUser);
+
+      return isFirstUser;
     } catch (error) {
       console.error("Ошибка при проверке первого пользователя:", error);
-      return false;
+
+      // При ошибке проверяем общее количество пользователей
+      try {
+        const allUsers = await databases.listDocuments(
+          appwriteConfig.databaseId,
+          appwriteConfig.collections.users,
+          [Query.limit(1)]
+        );
+
+        const isFirstUser = allUsers.total === 0;
+        console.log(
+          "Общее количество пользователей:",
+          allUsers.total,
+          "Первый пользователь:",
+          isFirstUser
+        );
+        return isFirstUser;
+      } catch (fallbackError) {
+        console.error(
+          "Ошибка при проверке общего количества пользователей:",
+          fallbackError
+        );
+        return false; // По умолчанию не считаем первым пользователем при ошибке
+      }
     }
   },
 
   // Регистрация
+  // Регистрация (улучшенная версия с подробным логированием)
   register: async (data: CreateUserDto): Promise<RegisterResult> => {
     try {
       const { name, email, password, role, studentId, groupId, phone } = data;
 
+      console.log("Начинаем регистрацию пользователя:", { name, email, role });
+
       // Проверяем, является ли это первым пользователем
       const isFirstUser = await authApi.checkIsFirstUser();
+      console.log("Результат проверки первого пользователя:", isFirstUser);
 
       // Первый пользователь автоматически становится админом
       const userRole = isFirstUser ? UserRole.ADMIN : role;
       const isActive = isFirstUser; // Первый пользователь сразу активен
 
+      console.log("Назначенная роль:", userRole, "Активен:", isActive);
+
       // Создаем аккаунт в Appwrite Auth
+      console.log("Создаем аккаунт в Appwrite Auth...");
       const appwriteUser = await account.create(
         ID.unique(),
         email,
         password,
         name
       );
+      console.log("Аккаунт создан в Auth, ID:", appwriteUser.$id);
 
       // Создаем профиль пользователя в базе данных
+      console.log("Создаем профиль в базе данных...");
+      const userProfileData = {
+        name,
+        email,
+        role: userRole,
+        isActive,
+        studentId: studentId || null,
+        groupId: groupId || null,
+        phone: phone || null,
+      };
+
+      console.log("Данные профиля:", userProfileData);
+
       const userProfile = await databases.createDocument(
         appwriteConfig.databaseId,
         appwriteConfig.collections.users,
         appwriteUser.$id,
-        {
-          name,
-          email,
-          role: userRole,
-          isActive,
-          studentId: studentId || null,
-          groupId: groupId || null,
-          phone: phone || null,
-        }
+        userProfileData
       );
+
+      console.log("Профиль создан:", userProfile.$id);
 
       const user = userProfile as unknown as User;
 
-      return {
+      const result = {
         user,
         isFirstUser,
       };
+
+      console.log("Регистрация завершена успешно:", {
+        userId: user.$id,
+        isFirstUser,
+        role: user.role,
+      });
+
+      return result;
     } catch (error: any) {
+      console.error("Ошибка при регистрации:", error);
+
+      // Детальный анализ ошибки
       if (error.code === 409) {
+        console.error("Конфликт: пользователь уже существует");
         throw new Error("Пользователь с таким email уже существует");
       }
+
+      if (error.code === 400) {
+        console.error("Некорректные данные:", error.message);
+        throw new Error("Некорректные данные для регистрации");
+      }
+
+      console.error("Неизвестная ошибка:", error.code, error.message);
       throw error;
     }
   },

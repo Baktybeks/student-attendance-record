@@ -14,7 +14,9 @@
     "permissions:check": "node scripts/setupPermissions.js check",
     "permissions:update": "node scripts/setupPermissions.js update",
     "permissions:setup": "node scripts/setupPermissions.js setup",
-    "setup:full": "npm run db:setup && npm run permissions:setup"
+    "setup:full": "npm run db:setup && npm run permissions:setup",
+    "test:first-user": "node scripts/testFirstUser.js",
+    "test:first-user:reset": "node scripts/testFirstUser.js reset"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.3",
