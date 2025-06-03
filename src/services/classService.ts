@@ -232,6 +232,8 @@ export const classApi = {
 
           return {
             $id: `v-${hash}`,
+            // $id: `v-${hash}`,
+
             // $id: `virtual-${schedule.$id}-${date}`,
             $createdAt: new Date().toISOString(),
             $updatedAt: new Date().toISOString(),
