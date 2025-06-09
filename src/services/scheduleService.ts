@@ -295,6 +295,7 @@ export const scheduleApi = {
     byDay: Record<WeekDay, number>;
     byWeekType: Record<string, number>;
     totalHoursPerWeek: number;
+    avgClassesPerDay: number; // Добавляем это поле
   }> => {
     try {
       const schedules = await scheduleApi.getAllSchedules();
@@ -322,6 +323,15 @@ export const scheduleApi = {
           return total + duration * multiplier;
         }, 0);
 
+      // Вычисляем среднее количество занятий в день
+      const daysWithClasses = Object.values(byDay).filter(
+        (count) => count > 0
+      ).length;
+      const avgClassesPerDay =
+        daysWithClasses > 0
+          ? Math.round((active / daysWithClasses) * 10) / 10
+          : 0;
+
       return {
         total: schedules.length,
         active,
@@ -329,6 +339,7 @@ export const scheduleApi = {
         byDay,
         byWeekType,
         totalHoursPerWeek: Math.round(totalHoursPerWeek * 10) / 10,
+        avgClassesPerDay, // Добавляем поле
       };
     } catch (error) {
       console.error("Ошибка при получении статистики расписания:", error);
@@ -339,6 +350,7 @@ export const scheduleApi = {
         byDay: {} as Record<WeekDay, number>,
         byWeekType: {},
         totalHoursPerWeek: 0,
+        avgClassesPerDay: 0, // Добавляем поле и в fallback
       };
     }
   },

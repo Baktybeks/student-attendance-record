@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/Button";
 
 // Локальный интерфейс для ClassCard
 interface ClassItem {
-  id?: string;
+  id: string; // Убираем знак вопроса - делаем обязательным
   subject: string;
   group: string;
   time: string;
@@ -112,6 +112,12 @@ export const TodayTab: React.FC = () => {
   const convertToClassItem = (classData: ClassWithDetails): ClassItem => {
     console.log("🔄 Конвертируем занятие:", classData);
 
+    // Проверяем наличие обязательного ID
+    if (!classData.$id) {
+      console.error("❌ Занятие без ID:", classData);
+      throw new Error("Занятие должно иметь ID");
+    }
+
     // Извлекаем данные из правильно структурированного объекта
     const subject = classData.schedule?.subject?.name || "Неизвестный предмет";
     const group =
@@ -125,7 +131,7 @@ export const TodayTab: React.FC = () => {
     const studentsCount = classData.schedule?.group?.studentsCount || 25;
 
     const result: ClassItem = {
-      id: classData.$id,
+      id: classData.$id, // Теперь мы уверены, что ID есть
       subject,
       group,
       time,
